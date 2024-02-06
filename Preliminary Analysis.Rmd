@@ -14,6 +14,7 @@ This contains code by Dr. Nathaniel Sharp that I have reorganized.
 ```{r, include=FALSE}
 library(R.utils, warn.conflicts=F)
 library(tidyverse)
+library(data.table)
 ```
 
 Key for chromosome names
@@ -27,9 +28,9 @@ chr_names2<-c("chr01","chr02","chr03","chr04","chr05","chr06","chr07","chr08","c
 Importing the transcription data. Source is the Churchman and Weissman paper.  
 
 ```{r}
-net.plus<-read.delim("transcription_data/plus_test.txt",h=F,sep=" ")
+net.plus<-read.delim("transcription_data/GSM617027_WT_NC_plus.txt",h=F,sep=" ")
 names(net.plus)<-c("pos","value")
-net.minus<-read.delim("transcription_data/minus_test.txt",h=F,sep=" ")
+net.minus<-read.delim("transcription_data/GSM617027_WT_NC_minus.txt",h=F,sep=" ")
 names(net.minus)<-c("pos","value")
 ```
 
@@ -62,8 +63,11 @@ net.diff <- full_join(net.minus, net.plus, by=c('pos', 'chr_num'))
 net.diff$diff <- net.diff$value.x - net.diff$value.y
 head(net.diff)
 summary(net.diff)
+# same value on both strands
 (net.diff %>% filter(diff == 0) %>% nrow()) / nrow(net.diff)
+# different value on both strands
 (net.diff %>% filter(diff != 0) %>% nrow()) / nrow(net.diff)
+# missing data on one or other strand
 (net.diff %>% filter(is.na(diff)) %>% nrow()) / nrow(net.diff)
 ```
 
@@ -103,19 +107,66 @@ Importing power to detect mutations data. But this chunk is does not seem to be 
 # rm(power)
 ```
 
-Importing annotations data from the xu et al paper
+Importing annotations data from the xu et al paper.
+
+The new things from this dataset are information about start and end sites of Cryptic Unstable Transcripts (CUTs), Stable Unannotated Transcripts (SUTs) and 
+
+Okay story time:
+There was an original paper. That paper had supplementary materials which are on the nature website. That table is in the file "Xu original.xls" file. The table A has everything that is in table B and C. Then there is SGD. They have too many files with the paper. The track files have this same data with an offset of 1. There are in fact 2 file formats (bed and gff3) with a different offset. I am not sure what the offsets are doing but that does not matter too much. The main concern is that CUTs, SUTs and others are not represented well in the annotations data. Here is the link: https://www.yeastgenome.org/reference/S000129105
+
+Update: There was a discrepancy in files because the SGD people realigned the reads to the updated version of the yeast genome which changed some of the data.
 
 ```{r}
-xu.tr<-read.delim("transcription_data/xu_annotations.txt", header = F)
-xu.lastcol <- data.frame(str_split_fixed(xu.tr$V9, ";", 8))
-names(xu.lastcol) <- c("ID", "Name", "A", "B", "C", "D", "E", "F")
-
-xu.tr$chr_num<-xu.tr$chr
+xu.tr<-read.delim("transcription_data/xu_annotations.txt", header=F)
+xu.headers <- c("chr", "source", "type", "start", "end", "score", "strand", "frame", "sourceMeta")
+names(xu.tr) <- xu.headers
 xu.tr$left<-xu.tr$start
 xu.tr$right<-xu.tr$end
-xu.tr$chr_name<-sapply(xu.tr$chr,function(x){chr_names[x]})
-
+xu.tr$chr_num<-sapply(xu.tr$chr,function(x){which(chr_names==x)})
+xu.tr <- xu.tr %>% select(chr_num, left, right, strand)
 ```
+
+Now trying out those other gff3 files
+
+```{r}
+xu.ofr <- read.delim("xu_data/Xu_2009_ORF-Ts_V64.txt", header=F)
+names(xu.ofr) <- xu.headers
+
+xu.cuts <- read.delim("xu_data/Xu_2009_CUTs_V64.txt", header=F)
+names(xu.cuts) <- xu.headers
+
+xu.suts <- read.delim("xu_data/Xu_2009_SUTs_V64.txt", header=F)
+names(xu.suts) <- xu.headers
+
+xu.others <- read.delim("xu_data/Xu_2009_other_transcripts_V64.txt", header=F)
+names(xu.others) <- xu.headers
+
+xu <- bind_rows(xu.ofr, xu.cuts, xu.suts, xu.others)
+rm(xu.ofr, xu.cuts, xu.suts, xu.others)
+
+xu$left<-xu$start
+xu$right<-xu$end
+xu$chr_num<-sapply(xu$chr,function(x){which(chr_names==x)})
+xu$class <- data.frame(str_split_fixed(xu$source, "_", 3))$X3
+xu <- xu %>% select(chr_num, left, right, strand, class)
+```
+
+With the Xu et al data, we ultimately care about the start and end position of transcript (mainly the start actually), which strand it is on and which chromosome it belongs to.
+
+Time for the Van Djik data. This data is about XUTs
+
+```{r}
+vand.tr<-read.delim("transcription_data/vanD_annotations.txt",h=F)
+vand.tr<-vand.tr[,c(1,4,5,7)]
+names(vand.tr)<-c("chr_name","left","right","strand")
+vand.tr$chr_num<-sapply(vand.tr$chr_name,function(i){which(chr_names==i)})
+```
+
+
+
+
+
+
 
 
 
@@ -140,10 +191,7 @@ xu.tr$chr_name<-sapply(xu.tr$chr,function(x){chr_names[x]})
 
 # 
 # 
-# vand.tr<-read.delim("transcription_data/vanD_annotations.txt",h=F)
-# vand.tr<-vand.tr[,c(1,4,5,7)]
-# names(vand.tr)<-c("chr_name","left","right","strand")
-# vand.tr$chr_num<-sapply(vand.tr$chr_name,function(i){which(chr_names==i)})
+
 # 
 # feat<-read.delim("transcription_data/SGD_features.txt",h=F)
 # feat<-feat[,c(1:4,9:12)]
