@@ -1,0 +1,531 @@
+---
+title: "Preliminary Analysis"
+author: "Rutuja"
+date: "2024-01-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This contains code by Dr. Nathaniel Sharp that I have reorganized.
+
+```{r, include=FALSE}
+library(R.utils, warn.conflicts=F)
+library(tidyverse)
+library(data.table)
+```
+
+Key for chromosome names
+
+```{r}
+chr_names<-c("chrI","chrII","chrIII","chrIV","chrV","chrVI","chrVII","chrVIII", "chrIX","chrX","chrXI","chrXII","chrXIII","chrXIV","chrXV","chrXVI")
+
+chr_names2<-c("chr01","chr02","chr03","chr04","chr05","chr06","chr07","chr08","chr09","chr10","chr11","chr12","chr13","chr14","chr15","chr16")
+```
+
+Importing the transcription data. Source is the Churchman and Weissman paper.  
+
+```{r}
+net.plus<-read.delim("transcription_data/GSM617027_WT_NC_plus.txt",h=F,sep=" ")
+names(net.plus)<-c("pos","value")
+net.minus<-read.delim("transcription_data/GSM617027_WT_NC_minus.txt",h=F,sep=" ")
+names(net.minus)<-c("pos","value")
+```
+
+Chromosome annotation
+1. Make a vector of the same length as the data, add 0 as the first element and chuck the last element.  
+2. For each chromosome, the files are organized in ascending order of pos. So, difference between the pos and prev series will be positive everywhere except where there is a chromosome change (starting from a small value again)  
+3. Those are the chromosome breaks  
+4. Repeat for the other dataset
+
+```{r}
+# need to add chromosome annotation (chromosomes are in order)
+prev<-c(0,net.plus$pos[1:(nrow(net.plus)-1)])
+diff<-sign(net.plus$pos-prev)
+net.plus$chr_num<-NA
+cut.rows<-c(1,which(diff<0),nrow(net.plus))
+for(i in c(1:16)){net.plus$chr_num[cut.rows[i]:cut.rows[i+1]]<-i}
+
+
+prev<-c(0,net.minus$pos[1:(nrow(net.minus)-1)])
+diff<-sign(net.minus$pos-prev)
+net.minus$chr_num<-NA
+cut.rows<-c(1,which(diff<0),nrow(net.minus))
+for(i in c(1:16)){net.minus$chr_num[cut.rows[i]:cut.rows[i+1]]<-i}
+```
+
+Joining and comparing the datasets to understand the difference
+Move to after chromosome annotations
+```{r}
+net.diff <- full_join(net.minus, net.plus, by=c('pos', 'chr_num'))
+net.diff$diff <- net.diff$value.x - net.diff$value.y
+head(net.diff)
+summary(net.diff)
+# same value on both strands
+(net.diff %>% filter(diff == 0) %>% nrow()) / nrow(net.diff)
+# different value on both strands
+(net.diff %>% filter(diff != 0) %>% nrow()) / nrow(net.diff)
+# missing data on one or other strand
+(net.diff %>% filter(is.na(diff)) %>% nrow()) / nrow(net.diff)
+```
+
+Mostly just NAs. So not many alignments in the same areas on both strands which makes sense.
+
+Rescaling the data to be integers. The data seems to have been multiplied by some constant to convert the number of reads data to something else. I am not sure where the multiplication constant is coming from but it is the minimum value in the dataset.
+
+```{r}
+val.plus <- min(net.plus$value)
+val.minus <- min(net.minus$value)
+
+# re-scale y so that it is an integer (assumes lowest non-zero value of y corresponds to 1 read per 10^7 sequences)
+net.plus$reads<-net.plus$value/val.plus
+net.minus$reads<-net.minus$value/val.minus
+
+```
+
+Exploratory plots. Plot of reads across chromosome I and a zoomed-in version of what one of the genes looks like
+
+```{r}
+net.plus %>% filter(chr_num == 1) %>% ggplot() + geom_line(aes(x=pos, y=reads)) +
+  scale_y_log10()
+net.plus %>% filter(chr_num == 1) %>% filter(pos > 70000 & pos < 75000) %>% ggplot() + geom_line(aes(x=pos, y=reads)) +
+  scale_y_log10()
+```
+
+
+
+Importing power to detect mutations data. But this chunk is does not seem to be required just yet.
+
+```{r}
+# power to detect mutations
+# power<-read.delim("power_by_site_with_bases.txt",h=F)
+# names(power)<-c("chr","pos","hap.wt","hap.del","dip.wt","dip.del","ref")
+# power$chr_num<-sapply(power$chr,function(i){which(chr_names2==i)})
+# 
+# rm(power)
+```
+
+Importing annotations data from the xu et al paper.
+
+The new things from this dataset are information about start and end sites of Cryptic Unstable Transcripts (CUTs), Stable Unannotated Transcripts (SUTs) and 
+
+Okay story time:
+There was an original paper. That paper had supplementary materials which are on the nature website. That table is in the file "Xu original.xls" file. The table A has everything that is in table B and C. Then there is SGD. They have too many files with the paper. The track files have this same data with an offset of 1. There are in fact 2 file formats (bed and gff3) with a different offset. I am not sure what the offsets are doing but that does not matter too much. The main concern is that CUTs, SUTs and others are not represented well in the annotations data. Here is the link: https://www.yeastgenome.org/reference/S000129105
+
+Update: There was a discrepancy in files because the SGD people realigned the reads to the updated version of the yeast genome which changed some of the data. The data that is used matches the gff3 version. So remember to use the right format for start and end site.
+
+```{r}
+# xu.tr<-read.delim("transcription_data/xu_annotations.txt", header=F)
+xu.headers <- c("chr", "source", "type", "start", "end", "score", "strand", "frame", "sourceMeta")
+# names(xu.tr) <- xu.headers
+# xu.tr$left<-xu.tr$start
+# xu.tr$right<-xu.tr$end
+# xu.tr$chr_num<-sapply(xu.tr$chr,function(x){which(chr_names==x)})
+# xu.tr <- xu.tr %>% select(chr_num, left, right, strand)
+```
+
+Now trying out those other gff3 files
+
+```{r}
+xu.ofr <- read.delim("xu_data/Xu_2009_ORF-Ts_V64.txt", header=F)
+names(xu.ofr) <- xu.headers
+
+xu.cuts <- read.delim("xu_data/Xu_2009_CUTs_V64.txt", header=F)
+names(xu.cuts) <- xu.headers
+
+xu.suts <- read.delim("xu_data/Xu_2009_SUTs_V64.txt", header=F)
+names(xu.suts) <- xu.headers
+
+xu.others <- read.delim("xu_data/Xu_2009_other_transcripts_V64.txt", header=F)
+names(xu.others) <- xu.headers
+
+xu <- bind_rows(xu.ofr, xu.cuts, xu.suts, xu.others)
+rm(xu.ofr, xu.cuts, xu.suts, xu.others)
+
+xu$left<-xu$start
+xu$right<-xu$end
+xu$chr_num<-sapply(xu$chr,function(x){which(chr_names==x)})
+xu$class <- data.frame(str_split_fixed(xu$source, "_", 3))$X3
+xu <- xu %>% select(chr_num, left, right, strand, class)
+xu.tr <- xu
+rm(xu)
+```
+
+With the Xu et al data, we ultimately care about the start and end position of transcript (mainly the start actually), which strand it is on and which chromosome it belongs to.
+
+Time for the Van Djik data. This data is about XUTs = Xrn1-sensitive Unstable Transcripts. Their main characteristic is that they are RNA pol II dependent and are polyadenylated. They accumulated in lithium media indicating a role in adaption to changes in growth conditions. It also a dataset that was realigned by SGD to match the updated genome. This is RNA Seq data. Fun fact: they reference the Xu et al paper and used the CUTs and SUTs data for annotation.
+
+```{r}
+vand.tr<-read.delim("transcription_data/vanD_annotations.txt",h=F)
+vand.tr<-vand.tr[,c(1,4,5,7)]
+names(vand.tr)<-c("chr_name","left","right","strand")
+vand.tr$chr_num<-sapply(vand.tr$chr_name,function(i){which(chr_names==i)})
+vand.tr <- vand.tr %>% select(-chr_name)
+```
+
+
+SGD features dataset
+
+```{r}
+feat<-read.csv("transcription_data/features.csv",h=T)
+feat<-feat[,c(2:5,10:13)]
+names(feat)<-c("SGDID","feat_type","feat_qual","name", "chr_num", "start", "stop", "strand_name")
+feat<-feat[feat$feat_qual != "Dubious",]
+
+feat$chr_num<-as.numeric(as.character(feat$chr_num))
+feat<-feat[feat$chr_num %in% c(1:16),]
+feat$strand<-sapply(feat$strand_name,function(i){if(i=="W"){"+"}
+  else{
+    if(i=="C"){"-"}
+    else{NA}}})
+feat <- feat %>% filter(!is.na(strand))
+feat$left<-sapply(1:nrow(feat),function(r){if(feat$strand[r]=="+"){feat$start[r]}else{feat$stop[r]}})
+feat$right<-sapply(1:nrow(feat),function(r){if(feat$strand[r]=="+"){feat$stop[r]}else{feat$start[r]}})
+
+# needs to be modified if I missed something that gets transcribed or if I added something that does not get transcribed.
+feat_types <- c("ORF", "intron", "ncRNA_gene", "noncoding_exon", "tRNA_gene", "snoRNA_gene", "pseudogene", "five_prime_UTR_intron", "snRA_gene", "rRNA_gene", "telomerase_RNA_gene")
+
+feat <- feat %>% filter(feat_type %in% feat_types)
+```
+
+Getting to the actual code. Now we have the transcription files in. Later we need to read in the replication data and the mutation data.
+
+```{r}
+# for each transcript dataset, determine transcription rate
+
+# function to get sum of NETseq reads in a particular region and strand
+# either as total reads across transcript, reads per bp, or peak sum in 500bp sliding window over first 700bp (as in Churchman paper)
+# warn=1 if the transcript is less than 700bp long
+# warn=2 if the strand indication is missing
+
+row.names(net.plus) <- paste(net.plus$chr_num, net.plus$pos, sep=" ")
+row.names(net.minus) <- paste(net.minus$chr_num, net.minus$pos, sep=" ")
+
+
+# original just total and density took 4.17 mins
+
+netseq_sum<-function(chr.i, pos.l, pos.r, str){
+  # finding the total reads
+  
+#   if(str=="+"){
+#     start = which(rownames(net.plus) == paste(chr.i, pos.l, " "))
+#   stop = which(rownames(net.plus) == paste(chr.i, pos.r, " "))
+# 		k<-net.plus[start:stop,"reads"]}
+#   else if (str == "-") {
+#      start = which(rownames(net.minus) == paste(chr.i, pos.l, " "))
+#      stop = which(rownames(net.minus) == paste(chr.i, pos.r, " "))
+# 			k<-net.minus[start:stop,"reads"]
+#   }
+#   else warn<-2
+# 	total<-sum(k$reads)
+  
+  
+	if(str=="+"){
+		k<-net.plus[net.plus$chr_num==chr.i & net.plus$pos>=pos.l & net.plus$pos<=pos.r,]}
+  else if (str == "-") {
+			k<-net.minus[net.minus$chr_num==chr.i & net.minus$pos>=pos.l & net.minus$pos<=pos.r,]
+  }
+  else warn<-2
+	total<-sum(k$reads)
+	density<-total/(pos.r-pos.l+1)
+	
+	# peak sum in 500bp sliding window over first 700bp (as in Churchman paper)
+	# if(str=="+"){
+	# 	peak<-max(sapply(c(pos.l:(pos.l+200)),function(i){sum(k$reads[k$pos>=i & k$pos<(i+500)])}))
+	# }
+	# else{
+	# 	peak<-max(sapply(c(pos.r:(pos.r-200)),function(i){sum(k$reads[k$pos<=i & k$pos>(i-500)])}))
+	# }
+	# 
+	
+	
+	peak = 0
+	# this may not work for the smaller ones but okay for now
+	if(pos.r-pos.l<700){warn<-1}
+	else{warn<-0}
+	return(c(total, density, peak, warn))
+}
+
+```
+
+Doing the calculations for the xu dataset.
+
+```{r}
+xu.tr$len<-xu.tr$right-xu.tr$left+1
+# xu.tr<-xu.tr[,c(11,12,13,15,3)]
+xu.tr$net_tot<-NA
+xu.tr$net_dens<-NA
+xu.tr$net_peak<-NA
+xu.tr$net_warn<-NA
+for(r in c(1:nrow(xu.tr))){
+	res<-netseq_sum(xu.tr$chr_num[r], xu.tr$left[r], xu.tr$right[r], xu.tr$strand[r])
+	xu.tr$net_tot[r]<-res[1]
+	xu.tr$net_dens[r]<-res[2]
+	xu.tr$net_peak[r]<-res[3]
+	if(res[4]>0){xu.tr$net_warn[r]<-T}else{xu.tr$net_warn[r]<-F}
+}
+```
+
+
+Trial efficient computation using queue
+
+```{r}
+trial<-xu.tr[,c("chr_num", "strand", "left", "right")]
+trial$consecutive <- c(0, trial$right[1:(length(trial$right)-1)])
+trial$overlap <- (trial$left - trial$consecutive) > 0
+count(trial, overlap)
+
+start <- trial$left
+stop <- trial$right
+index <- 1
+```
+
+
+
+
+
+
+```{r}
+# default.args<-list(chr.num=0)
+
+# args <- commandArgs(trailingOnly=T,asValues=T,defaults=default.args,excludeReserved=T)
+# keys <- attachLocally(args)
+# 
+# error.file<-file(paste("chr",chr.num,"messages.txt",sep=""), open="at")
+# sink(error.file, type="message")
+ 
+
+## What is this even doing?
+# 
+# d<-power[power$chr_num==chr.num,]
+# d$pwr.tot<-rowSums(d[,c(3:6)])
+# 
+
+
+# 
+# vand.tr$len<-vand.tr$right-vand.tr$left+1
+# vand.tr<-vand.tr[,c(5,2,3,6,4)]
+# vand.tr$net_tot<-NA
+# vand.tr$net_dens<-NA
+# vand.tr$net_peak<-NA
+# vand.tr$net_warn<-NA
+# for(r in c(1:nrow(vand.tr))){
+# 	res<-netseq_sum(vand.tr$chr_num[r], vand.tr$left[r], vand.tr$right[r], vand.tr$strand[r])
+# 	vand.tr$net_tot[r]<-res[1]
+# 	vand.tr$net_dens[r]<-res[2]
+# 	vand.tr$net_peak[r]<-res[3]
+# 	if(res[4]>0){vand.tr$net_warn[r]<-T}else{vand.tr$net_warn[r]<-F}
+# }
+# 
+# 
+# feat$len<-feat$right-feat$left+1
+# feat<-feat[,c(5,10,11,12,9)]
+# feat$net_tot<-NA
+# feat$net_dens<-NA
+# feat$net_peak<-NA
+# feat$net_warn<-NA
+# for(r in c(1:nrow(feat))){
+# 	res<-netseq_sum(feat$chr_num[r], feat$left[r], feat$right[r], feat$strand[r])
+# 	feat$net_tot[r]<-res[1]
+# 	feat$net_dens[r]<-res[2]
+# 	feat$net_peak[r]<-res[3]
+# 	if(res[4]>0){feat$net_warn[r]<-T}else{feat$net_warn[r]<-F}
+# }
+# 
+# 
+# #_____________________________________________________________________________________________________________________________________
+# #_____________________________________________________________________________________________________________________________________
+# # for each site in the genome, determine the direction and magnitude of the most likely transcript
+# 
+# # functions to check for overlap with each feature type
+# xu_overlap<-function(chr.i, pos.i){if(nrow(xu.tr[xu.tr$chr_num==chr.i & xu.tr$left<=pos.i & xu.tr$right>=pos.i,])>0){T}else{F}}
+# feat_overlap<-function(chr.i, pos.i){if(nrow(feat[feat$chr_num==chr.i & feat$left<=pos.i & feat$right>=pos.i,])>0){T}else{F}}
+# vand_overlap<-function(chr.i, pos.i){if(nrow(vand.tr[vand.tr$chr_num==chr.i & vand.tr$left<=pos.i & vand.tr$right>=pos.i,])>0){T}else{F}}
+# 
+# d$xu.overlap<-sapply(1:nrow(d),function(r){xu_overlap(d$chr_num[r], d$pos[r])})
+# d$feat.overlap<-sapply(1:nrow(d),function(r){feat_overlap(d$chr_num[r], d$pos[r])})
+# d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r])})
+# 
+# d$transcribed<-NA
+# d$net_tot<-NA
+# d$net_dens<-NA
+# d$net_peak<-NA
+# d$net_warn<-NA
+# d$tr.strand<-NA
+# d$len<-NA
+# 
+# for(r in c(1:nrow(d))){
+# 	if(r %% 1000 == 0){cat(r, file=error.file, sep=" ")}
+# 	
+# 	if(d$xu.overlap[r]==F & d$feat.overlap[r]==F & d$vand.overlap[r]==F){
+# 		d$transcribed[r]<-F
+# 		d$net_tot[r]<-0
+# 		d$net_dens[r]<-0
+# 		d$net_peak[r]<-0
+# 		d$net_warn[r]<-F
+# 		d$tr.strand[r]<-NA
+# 		d$len[r]<-NA
+# 	}else{
+# 		d$transcribed[r]<-T
+# 		dt<-data.frame()
+# 		if(d$xu.overlap[r]){
+# 			dt<-rbind(dt, xu.tr[xu.tr$chr_num==d$chr_num[r] & xu.tr$left<=d$pos[r] & xu.tr$right>=d$pos[r],])
+# 		}
+# 		if(d$feat.overlap[r]){
+# 			dt<-rbind(dt, feat[feat$chr_num==d$chr_num[r] & feat$left<=d$pos[r] & feat$right>=d$pos[r],])
+# 		}
+# 		if(d$vand.overlap[r]){
+# 			dt<-rbind(dt, vand.tr[vand.tr$chr_num==d$chr_num[r] & vand.tr$left<=d$pos[r] & vand.tr$right>=d$pos[r],])
+# 		}
+# 		
+# 		done<-F
+# 		# just one feature
+# 		if(nrow(dt)==1){
+# 			d$net_tot[r]<-dt$net_tot[1]
+# 			d$net_dens[r]<-dt$net_dens[1]
+# 			d$net_peak[r]<-dt$net_peak[1]
+# 			d$net_warn[r]<-dt$net_warn[1]
+# 			d$tr.strand[r]<-as.character(dt$strand[1])
+# 			d$len[r]<-dt$len[1]
+# 			done<-T
+# 		}
+# 		
+# 		# two or more features all on the same strand -- choose transcript where site is closest to transcript start; 
+# 		#  if there is a tie choose the longest transcript; if there is still a tie choose the first transcript in the list (by default)
+# 		if(done==F & nrow(dt)>1 & length(unique(dt$strand))==1){
+# 			d$tr.strand[r]<-as.character(dt$strand[1])
+# 			if(as.character(dt$strand[1])=="+"){
+# 				dt$dist<-d$pos[r]-dt$left
+# 			}else{
+# 				dt$dist<-dt$right-d$pos[r]
+# 			}
+# 			dt.sub<-dt[dt$dist==min(dt$dist),]
+# 			if(nrow(dt.sub==1)){
+# 				d$net_tot[r]<-dt.sub$net_tot[1]
+# 				d$net_dens[r]<-dt.sub$net_dens[1]
+# 				d$net_peak[r]<-dt.sub$net_peak[1]
+# 				d$net_warn[r]<-dt.sub$net_warn[1]
+# 				d$len[r]<-dt.sub$len[1]
+# 				done<-T
+# 			}else{
+# 				dt.sub2<-dt.sub[dt.sub$len==max(dt.sub$len),]
+# 				d$net_tot[r]<-dt.sub2$net_tot[1]
+# 				d$net_dens[r]<-dt.sub2$net_dens[1]
+# 				d$net_peak[r]<-dt.sub2$net_peak[1]
+# 				d$net_warn[r]<-dt.sub2$net_warn[1]
+# 				d$len[r]<-dt.sub2$len[1]
+# 				done<-T
+# 			}
+# 		}
+# 			
+# 		# two or more features with some on each strand -- same rules as above
+# 		if(done==F & nrow(dt)>1 & length(unique(dt$strand))>1){
+# 			dt$dist<-sapply(c(1:nrow(dt)),function(x){
+# 				if(as.character(dt$strand[x])=="+"){
+# 					return(d$pos[r]-dt$left[x])
+# 				}else{
+# 					return(dt$right[x]-d$pos[r])
+# 				}
+# 			})
+# 			
+# 			dt.sub<-dt[dt$dist==min(dt$dist),]
+# 			if(nrow(dt.sub==1)){
+# 				d$net_tot[r]<-dt.sub$net_tot[1]
+# 				d$net_dens[r]<-dt.sub$net_dens[1]
+# 				d$net_peak[r]<-dt.sub$net_peak[1]
+# 				d$net_warn[r]<-dt.sub$net_warn[1]
+# 				d$tr.strand[r]<-as.character(dt.sub$strand[1])
+# 				d$len[r]<-dt.sub$len[1]
+# 				done<-T
+# 			}else{
+# 				dt.sub2<-dt.sub[dt.sub$len==max(dt.sub$len),]
+# 				d$net_tot[r]<-dt.sub2$net_tot[1]
+# 				d$net_dens[r]<-dt.sub2$net_dens[1]
+# 				d$net_peak[r]<-dt.sub2$net_peak[1]
+# 				d$net_warn[r]<-dt.sub2$net_warn[1]
+# 				d$tr.strand[r]<-as.character(dt.sub2$strand[1])
+# 				d$len[r]<-dt.sub2$len[1]
+# 				done<-T
+# 			}
+# 		}
+# 	}
+# }
+# 
+# #_____________________________________________________________________________________________________________________________________
+# #_____________________________________________________________________________________________________________________________________
+# # add replication information
+# 
+# # replication dynamics
+# rep.dynamics.hap<-read.delim("transcription_data/Muller_rep_times_hap.txt")
+# rep.dynamics.hap$chr<-sapply(rep.dynamics.hap$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
+# rep.dynamics.hap$start<-rep.dynamics.hap$pos-500; rep.dynamics.hap$end<-rep.dynamics.hap$pos+499
+# rep.dynamics.dip<-read.delim("transcription_data/Muller_rep_times_dip.txt")
+# rep.dynamics.dip$chr<-sapply(rep.dynamics.dip$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
+# rep.dynamics.dip$start<-rep.dynamics.dip$pos-500; rep.dynamics.dip$end<-rep.dynamics.dip$pos+499
+# 
+# # for each chromosome fit a loess model to the data, with span = 50kb
+# loess.span<-50000
+# loess.models.hap<-list()
+# for(chr_num in c(1:16)){
+# 	chr.data<-rep.dynamics.hap[rep.dynamics.hap$chr_num==chr_num,]
+# 	mod<-loess(ratio~pos, chr.data,span=loess.span/max(chr.data$pos))
+# 	loess.models.hap<-c(loess.models.hap, list(mod))
+# }
+# loess.models.dip<-list()
+# for(chr_num in c(1:16)){
+# 	chr.data<-rep.dynamics.dip[rep.dynamics.dip$chr_num==chr_num,]
+# 	mod<-loess(ratio~pos, chr.data,span=loess.span/max(chr.data$pos))
+# 	loess.models.dip<-c(loess.models.dip, list(mod))
+# }
+# 
+# # functions to determine the derivative of the loess fit for a given chromosome and position
+# nderiv<-function(fit, x, eps=1e-5){(predict(fit, x + eps) - predict(fit, x - eps))/(2 * eps)}
+# 
+# # nderiv will return NA at the boundary, so add or subtract 1 to get the slope
+# find.rep.slope<-function(chr, pos, model.list){
+# 	mod<-model.list[[which(chr_names2==chr)]]
+# 	sl<-nderiv(mod, pos)
+# 	if(is.na(sl)){sl<-nderiv(mod, pos+1);if(is.na(sl)){sl<-nderiv(mod, pos-1)}}
+# 	return(sl)
+# }
+# 
+# # determine slope at each pos 
+# rep.dynamics.hap$rep.slope<-sapply(1:nrow(rep.dynamics.hap),function(r){
+# 	find.rep.slope(rep.dynamics.hap$chr[r],rep.dynamics.hap$pos[r],loess.models.hap)
+# })
+# rep.dynamics.dip$rep.slope<-sapply(1:nrow(rep.dynamics.dip),function(r){
+# 	find.rep.slope(rep.dynamics.dip$chr[r],rep.dynamics.dip$pos[r],loess.models.dip)
+# })
+# 
+# d$rep.strand.hap<-NA
+# d$rep.strand.dip<-NA
+# for(r in c(1:nrow(rep.dynamics.hap))){
+# 	d$rep.strand.hap[which(d$chr==rep.dynamics.hap$chr[r] & d$pos>=rep.dynamics.hap$start[r] & d$pos<=rep.dynamics.hap$end[r])]<-sign(rep.dynamics.hap$rep.slope[r])
+# }
+# for(r in c(1:nrow(rep.dynamics.dip))){
+# 	d$rep.strand.dip[which(d$chr==rep.dynamics.dip$chr[r] & d$pos>=rep.dynamics.dip$start[r] & d$pos<=rep.dynamics.dip$end[r])]<-sign(rep.dynamics.dip$rep.slope[r])
+# }
+# d$rep.ratio.hap<-NA
+# d$rep.ratio.dip<-NA
+# for(r in c(1:nrow(rep.dynamics.hap))){
+# 	d$rep.ratio.hap[which(d$chr==rep.dynamics.hap$chr[r] & d$pos>=rep.dynamics.hap$start[r] & d$pos<=rep.dynamics.hap$end[r])]<-rep.dynamics.hap$ratio[r]
+# }
+# for(r in c(1:nrow(rep.dynamics.dip))){
+# 	d$rep.ratio.dip[which(d$chr==rep.dynamics.dip$chr[r] & d$pos>=rep.dynamics.dip$start[r] & d$pos<=rep.dynamics.dip$end[r])]<-rep.dynamics.dip$ratio[r]
+# }
+# d$rep.ratio.avg<-sapply(c(1:nrow(d)),function(r){(d$rep.ratio.hap[r]+d$rep.ratio.dip[r])/2})
+# 
+# 
+# 
+# write.table(d, paste("chr",chr.num,"results.txt",sep=""), quote=F,sep="\t",row.names=F)
+# 
+# 
+# 
+# 
+# 
+# 
+
+```
+
