@@ -14,7 +14,7 @@ This contains code by Dr. Nathaniel Sharp that I have reorganized.
 ```{r, include=FALSE}
 library(R.utils, warn.conflicts=F)
 library(tidyverse)
-library(data.table)
+# library(data.table)
 ```
 
 Key for chromosome names
@@ -96,15 +96,13 @@ net.plus %>% filter(chr_num == 1) %>% filter(pos > 70000 & pos < 75000) %>% ggpl
 
 
 
-Importing power to detect mutations data. But this chunk is does not seem to be required just yet.
+Importing power to detect mutations data. This will later be used to store per base information for the entire genome.
 
 ```{r}
 # power to detect mutations
-# power<-read.delim("power_by_site_with_bases.txt",h=F)
-# names(power)<-c("chr","pos","hap.wt","hap.del","dip.wt","dip.del","ref")
-# power$chr_num<-sapply(power$chr,function(i){which(chr_names2==i)})
-# 
-# rm(power)
+power<-read.delim("power_by_site_with_bases.txt",h=F)
+names(power)<-c("chr","pos","hap.wt","hap.del","dip.wt","dip.del","ref")
+power$chr_num<-sapply(power$chr,function(i){which(chr_names2==i)})
 ```
 
 Importing annotations data from the xu et al paper.
@@ -117,13 +115,7 @@ There was an original paper. That paper had supplementary materials which are on
 Update: There was a discrepancy in files because the SGD people realigned the reads to the updated version of the yeast genome which changed some of the data. The data that is used matches the gff3 version. So remember to use the right format for start and end site.
 
 ```{r}
-# xu.tr<-read.delim("transcription_data/xu_annotations.txt", header=F)
 xu.headers <- c("chr", "source", "type", "start", "end", "score", "strand", "frame", "sourceMeta")
-# names(xu.tr) <- xu.headers
-# xu.tr$left<-xu.tr$start
-# xu.tr$right<-xu.tr$end
-# xu.tr$chr_num<-sapply(xu.tr$chr,function(x){which(chr_names==x)})
-# xu.tr <- xu.tr %>% select(chr_num, left, right, strand)
 ```
 
 Now trying out those other gff3 files
@@ -166,7 +158,7 @@ vand.tr <- vand.tr %>% select(-chr_name)
 ```
 
 
-SGD features dataset
+SGD features dataset downloaded version is from January 14, 2017. 
 
 ```{r}
 feat<-read.csv("transcription_data/features.csv",h=T)
@@ -188,9 +180,17 @@ feat$right<-sapply(1:nrow(feat),function(r){if(feat$strand[r]=="+"){feat$stop[r]
 feat_types <- c("ORF", "intron", "ncRNA_gene", "noncoding_exon", "tRNA_gene", "snoRNA_gene", "pseudogene", "five_prime_UTR_intron", "snRA_gene", "rRNA_gene", "telomerase_RNA_gene")
 
 feat <- feat %>% filter(feat_type %in% feat_types)
+feat <- feat %>% select(feat_type, chr_num, left, right, strand)
 ```
 
 Getting to the actual code. Now we have the transcription files in. Later we need to read in the replication data and the mutation data.
+
+
+
+For each transcript dataset, determine transcription rate
+
+Function to get sum of NETseq reads in a range on strand. This adding a warning if trancript less than 700 bp long and a different warning if strand is missing.
+
 
 ```{r}
 # for each transcript dataset, determine transcription rate
@@ -200,27 +200,8 @@ Getting to the actual code. Now we have the transcription files in. Later we nee
 # warn=1 if the transcript is less than 700bp long
 # warn=2 if the strand indication is missing
 
-row.names(net.plus) <- paste(net.plus$chr_num, net.plus$pos, sep=" ")
-row.names(net.minus) <- paste(net.minus$chr_num, net.minus$pos, sep=" ")
-
-
-# original just total and density took 4.17 mins
-
 netseq_sum<-function(chr.i, pos.l, pos.r, str){
   # finding the total reads
-  
-#   if(str=="+"){
-#     start = which(rownames(net.plus) == paste(chr.i, pos.l, " "))
-#   stop = which(rownames(net.plus) == paste(chr.i, pos.r, " "))
-# 		k<-net.plus[start:stop,"reads"]}
-#   else if (str == "-") {
-#      start = which(rownames(net.minus) == paste(chr.i, pos.l, " "))
-#      stop = which(rownames(net.minus) == paste(chr.i, pos.r, " "))
-# 			k<-net.minus[start:stop,"reads"]
-#   }
-#   else warn<-2
-# 	total<-sum(k$reads)
-  
   
 	if(str=="+"){
 		k<-net.plus[net.plus$chr_num==chr.i & net.plus$pos>=pos.l & net.plus$pos<=pos.r,]}
@@ -228,6 +209,7 @@ netseq_sum<-function(chr.i, pos.l, pos.r, str){
 			k<-net.minus[net.minus$chr_num==chr.i & net.minus$pos>=pos.l & net.minus$pos<=pos.r,]
   }
   else warn<-2
+  
 	total<-sum(k$reads)
 	density<-total/(pos.r-pos.l+1)
 	
@@ -239,7 +221,6 @@ netseq_sum<-function(chr.i, pos.l, pos.r, str){
 	# 	peak<-max(sapply(c(pos.r:(pos.r-200)),function(i){sum(k$reads[k$pos<=i & k$pos>(i-500)])}))
 	# }
 	# 
-	
 	
 	peak = 0
 	# this may not work for the smaller ones but okay for now
@@ -254,11 +235,11 @@ Doing the calculations for the xu dataset.
 
 ```{r}
 xu.tr$len<-xu.tr$right-xu.tr$left+1
-# xu.tr<-xu.tr[,c(11,12,13,15,3)]
 xu.tr$net_tot<-NA
 xu.tr$net_dens<-NA
 xu.tr$net_peak<-NA
 xu.tr$net_warn<-NA
+t0 <- Sys.time()
 for(r in c(1:nrow(xu.tr))){
 	res<-netseq_sum(xu.tr$chr_num[r], xu.tr$left[r], xu.tr$right[r], xu.tr$strand[r])
 	xu.tr$net_tot[r]<-res[1]
@@ -266,87 +247,123 @@ for(r in c(1:nrow(xu.tr))){
 	xu.tr$net_peak[r]<-res[3]
 	if(res[4]>0){xu.tr$net_warn[r]<-T}else{xu.tr$net_warn[r]<-F}
 }
+t1 <- Sys.time()
+t1-t0
+```
+
+Performing similar calculations for Van Djik and SGD Features data
+
+```{r}
+
+vand.tr$len<-vand.tr$right-vand.tr$left+1
+vand.tr$net_tot<-NA
+vand.tr$net_dens<-NA
+vand.tr$net_peak<-NA
+vand.tr$net_warn<-NA
+t0 <- Sys.time()
+for(r in c(1:nrow(vand.tr))){
+	res<-netseq_sum(vand.tr$chr_num[r], vand.tr$left[r], vand.tr$right[r], vand.tr$strand[r])
+	vand.tr$net_tot[r]<-res[1]
+	vand.tr$net_dens[r]<-res[2]
+	vand.tr$net_peak[r]<-res[3]
+	if(res[4]>0){vand.tr$net_warn[r]<-T}else{vand.tr$net_warn[r]<-F}
+}
+t1 <- Sys.time()
+t1-t0
+```
+
+```{r}
+feat$len<-feat$right-feat$left+1
+feat$net_tot<-NA
+feat$net_dens<-NA
+feat$net_peak<-NA
+feat$net_warn<-NA
+t0 <- Sys.time()
+for(r in c(1:nrow(feat))){
+	res<-netseq_sum(feat$chr_num[r], feat$left[r], feat$right[r], feat$strand[r])
+	feat$net_tot[r]<-res[1]
+	feat$net_dens[r]<-res[2]
+	feat$net_peak[r]<-res[3]
+	if(res[4]>0){feat$net_warn[r]<-T}else{feat$net_warn[r]<-F}
+}
+t1 <- Sys.time()
+t1-t0
+```
+
+Setting up a data frame for per base information. This will further be useful for making comparisons with replication and mutation data.
+
+```{r}
+d <- power %>% select(chr_num, pos, ref, hap.wt, hap.del, dip.wt, dip.del)
+d$pwr.tot<-rowSums(d[,c(4:7)])
 ```
 
 
-Trial efficient computation using queue
+For each site in the genome, determining the direction and magnitude of the most likely transcript. Changing the functions to check overlap to work the opposite way to make things faster.
 
 ```{r}
-trial<-xu.tr[,c("chr_num", "strand", "left", "right")]
-trial$consecutive <- c(0, trial$right[1:(length(trial$right)-1)])
-trial$overlap <- (trial$left - trial$consecutive) > 0
-count(trial, overlap)
+row.names(d) <- as.character(d$chr_num*1e8 + d$pos)
 
-start <- trial$left
-stop <- trial$right
-index <- 1
+d$xu.overlap <- 0
+d$vand.overlap <- 0
+d$feat.overlap <- 0
+
+for (i in 1:nrow(xu.tr)){
+  chr <- xu.tr[i, "chr_num"]
+  left <- xu.tr[i, "left"] + chr*1e8
+  right <- xu.tr[i, "right"] + chr*1e8
+  for (j in left:right){
+    d[as.character(j), "xu.overlap"] = d[as.character(j), "xu.overlap"] + 1
+  }
+}
+
+for (i in 1:nrow(vand.tr)){
+  chr <- vand.tr[i, "chr_num"]
+  left <- vand.tr[i, "left"]
+  right <- vand.tr[i, "right"]
+  for (j in left:right){
+    vand.overlap[j] = vand.overlap[j] + 1
+  }
+}
+
+for (i in 1:nrow(feat)){
+  chr <- feat[i, "chr_num"]
+  left <- feat[i, "left"]
+  right <- feat[i, "right"]
+  for (j in left:right){
+    feat.overlap[j] = feat.overlap[j] + 1
+  }
+}
+
+
+d$xu.overlap <- xu.overlap
+d$vand.overlap <- vand.overlap
+d$feat.overlap <- feat.overlap
+```
+
+
+This is very inefficient. But so is the one above. Doesnt hurt to try at this point.
+
+```{r}
+# for each site in the genome, determine the direction and magnitude of the most likely transcript
+
+# functions to check for overlap with each feature type
+xu_overlap<-function(chr.i, pos.i){if(nrow(xu.tr[xu.tr$chr_num==chr.i & xu.tr$left<=pos.i & xu.tr$right>=pos.i,])>0){T}else{F}}
+feat_overlap<-function(chr.i, pos.i){if(nrow(feat[feat$chr_num==chr.i & feat$left<=pos.i & feat$right>=pos.i,])>0){T}else{F}}
+vand_overlap<-function(chr.i, pos.i){if(nrow(vand.tr[vand.tr$chr_num==chr.i & vand.tr$left<=pos.i & vand.tr$right>=pos.i,])>0){T}else{F}}
+
+d$xu.overlap<-sapply(1:nrow(d),function(r){xu_overlap(d$chr_num[r], d$pos[r])})
+d$feat.overlap<-sapply(1:nrow(d),function(r){feat_overlap(d$chr_num[r], d$pos[r])})
+d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r])})
+
 ```
 
 
 
-
-
-
 ```{r}
-# default.args<-list(chr.num=0)
 
-# args <- commandArgs(trailingOnly=T,asValues=T,defaults=default.args,excludeReserved=T)
-# keys <- attachLocally(args)
-# 
 # error.file<-file(paste("chr",chr.num,"messages.txt",sep=""), open="at")
 # sink(error.file, type="message")
- 
-
-## What is this even doing?
 # 
-# d<-power[power$chr_num==chr.num,]
-# d$pwr.tot<-rowSums(d[,c(3:6)])
-# 
-
-
-# 
-# vand.tr$len<-vand.tr$right-vand.tr$left+1
-# vand.tr<-vand.tr[,c(5,2,3,6,4)]
-# vand.tr$net_tot<-NA
-# vand.tr$net_dens<-NA
-# vand.tr$net_peak<-NA
-# vand.tr$net_warn<-NA
-# for(r in c(1:nrow(vand.tr))){
-# 	res<-netseq_sum(vand.tr$chr_num[r], vand.tr$left[r], vand.tr$right[r], vand.tr$strand[r])
-# 	vand.tr$net_tot[r]<-res[1]
-# 	vand.tr$net_dens[r]<-res[2]
-# 	vand.tr$net_peak[r]<-res[3]
-# 	if(res[4]>0){vand.tr$net_warn[r]<-T}else{vand.tr$net_warn[r]<-F}
-# }
-# 
-# 
-# feat$len<-feat$right-feat$left+1
-# feat<-feat[,c(5,10,11,12,9)]
-# feat$net_tot<-NA
-# feat$net_dens<-NA
-# feat$net_peak<-NA
-# feat$net_warn<-NA
-# for(r in c(1:nrow(feat))){
-# 	res<-netseq_sum(feat$chr_num[r], feat$left[r], feat$right[r], feat$strand[r])
-# 	feat$net_tot[r]<-res[1]
-# 	feat$net_dens[r]<-res[2]
-# 	feat$net_peak[r]<-res[3]
-# 	if(res[4]>0){feat$net_warn[r]<-T}else{feat$net_warn[r]<-F}
-# }
-# 
-# 
-# #_____________________________________________________________________________________________________________________________________
-# #_____________________________________________________________________________________________________________________________________
-# # for each site in the genome, determine the direction and magnitude of the most likely transcript
-# 
-# # functions to check for overlap with each feature type
-# xu_overlap<-function(chr.i, pos.i){if(nrow(xu.tr[xu.tr$chr_num==chr.i & xu.tr$left<=pos.i & xu.tr$right>=pos.i,])>0){T}else{F}}
-# feat_overlap<-function(chr.i, pos.i){if(nrow(feat[feat$chr_num==chr.i & feat$left<=pos.i & feat$right>=pos.i,])>0){T}else{F}}
-# vand_overlap<-function(chr.i, pos.i){if(nrow(vand.tr[vand.tr$chr_num==chr.i & vand.tr$left<=pos.i & vand.tr$right>=pos.i,])>0){T}else{F}}
-# 
-# d$xu.overlap<-sapply(1:nrow(d),function(r){xu_overlap(d$chr_num[r], d$pos[r])})
-# d$feat.overlap<-sapply(1:nrow(d),function(r){feat_overlap(d$chr_num[r], d$pos[r])})
-# d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r])})
 # 
 # d$transcribed<-NA
 # d$net_tot<-NA
@@ -452,6 +469,23 @@ index <- 1
 # 		}
 # 	}
 # }
+```
+
+
+
+
+
+
+```{r}
+# default.args<-list(chr.num=0)
+
+# args <- commandArgs(trailingOnly=T,asValues=T,defaults=default.args,excludeReserved=T)
+# keys <- attachLocally(args)
+# 
+
+ 
+
+
 # 
 # #_____________________________________________________________________________________________________________________________________
 # #_____________________________________________________________________________________________________________________________________
