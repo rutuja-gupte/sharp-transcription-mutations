@@ -177,7 +177,11 @@ feat$left<-sapply(1:nrow(feat),function(r){if(feat$strand[r]=="+"){feat$start[r]
 feat$right<-sapply(1:nrow(feat),function(r){if(feat$strand[r]=="+"){feat$stop[r]}else{feat$start[r]}})
 
 # needs to be modified if I missed something that gets transcribed or if I added something that does not get transcribed.
-feat_types <- c("ORF", "intron", "ncRNA_gene", "noncoding_exon", "tRNA_gene", "snoRNA_gene", "pseudogene", "five_prime_UTR_intron", "snRA_gene", "rRNA_gene", "telomerase_RNA_gene")
+feat_types <- c("ORF", "intron", "ncRNA_gene", "noncoding_exon", "tRNA_gene", "snoRNA_gene", "pseudogene", "five_prime_UTR_intron", "snRA_gene", "rRNA_gene", "telomerase_RNA_gene", "CDS", "external_transcribed_spacer_region", "internal_transcribed_spacer_region", "transposable_element_gene")
+
+# CDS: exclude introns?
+# ORF: include introns?
+# retrotransposons? maybe
 
 feat <- feat %>% filter(feat_type %in% feat_types)
 feat <- feat %>% select(feat_type, chr_num, left, right, strand)
@@ -231,7 +235,14 @@ netseq_sum<-function(chr.i, pos.l, pos.r, str){
 
 ```
 
-Doing the calculations for the xu dataset.
+Now testing to see if it actually works.
+
+```{r}
+netseq_sum(1, 7276, 9260, '-')
+```
+
+
+These computations take some time but not too long (order of 10 minutes). Doing the calculations for the xu dataset.
 
 ```{r}
 xu.tr$len<-xu.tr$right-xu.tr$left+1
@@ -298,62 +309,114 @@ d$pwr.tot<-rowSums(d[,c(4:7)])
 ```
 
 
-For each site in the genome, determining the direction and magnitude of the most likely transcript. Changing the functions to check overlap to work the opposite way to make things faster.
+For each site in the genome, determining the direction and magnitude of the most likely transcript. Changing the functions to update the net.plus and net.minus dataframes first. They are smaller that the d dataframe of the whole genome so hoepfully it will be faster.
 
 ```{r}
-row.names(d) <- as.character(d$chr_num*1e8 + d$pos)
+xu.tr <- xu.tr %>% relocate(chr_num, left, right, strand)
+vand.tr$class <- "XUTs"
+vand.tr <- vand.tr %>% relocate(chr_num, left, right, strand)
+feat <- feat %>% rename("class" = "feat_type")
+feat <- feat %>% relocate(chr_num, left, right, strand)
 
-d$xu.overlap <- 0
-d$vand.overlap <- 0
-d$feat.overlap <- 0
+net.plus$net_tot <- 0
+net.plus$net_dens <- 0
+net.plus$class <- "None"
 
-for (i in 1:nrow(xu.tr)){
-  chr <- xu.tr[i, "chr_num"]
-  left <- xu.tr[i, "left"] + chr*1e8
-  right <- xu.tr[i, "right"] + chr*1e8
-  for (j in left:right){
-    d[as.character(j), "xu.overlap"] = d[as.character(j), "xu.overlap"] + 1
-  }
-}
-
-for (i in 1:nrow(vand.tr)){
-  chr <- vand.tr[i, "chr_num"]
-  left <- vand.tr[i, "left"]
-  right <- vand.tr[i, "right"]
-  for (j in left:right){
-    vand.overlap[j] = vand.overlap[j] + 1
-  }
-}
-
-for (i in 1:nrow(feat)){
-  chr <- feat[i, "chr_num"]
-  left <- feat[i, "left"]
-  right <- feat[i, "right"]
-  for (j in left:right){
-    feat.overlap[j] = feat.overlap[j] + 1
-  }
-}
-
-
-d$xu.overlap <- xu.overlap
-d$vand.overlap <- vand.overlap
-d$feat.overlap <- feat.overlap
+net.minus$net_tot <- 0
+net.minus$net_dens <- 0
+net.minus$class <- "None"
 ```
 
 
-This is very inefficient. But so is the one above. Doesnt hurt to try at this point.
+Trying out the logic for one row. This code will be generalized and run on deepthought.
 
 ```{r}
-# for each site in the genome, determine the direction and magnitude of the most likely transcript
 
-# functions to check for overlap with each feature type
-xu_overlap<-function(chr.i, pos.i){if(nrow(xu.tr[xu.tr$chr_num==chr.i & xu.tr$left<=pos.i & xu.tr$right>=pos.i,])>0){T}else{F}}
-feat_overlap<-function(chr.i, pos.i){if(nrow(feat[feat$chr_num==chr.i & feat$left<=pos.i & feat$right>=pos.i,])>0){T}else{F}}
-vand_overlap<-function(chr.i, pos.i){if(nrow(vand.tr[vand.tr$chr_num==chr.i & vand.tr$left<=pos.i & vand.tr$right>=pos.i,])>0){T}else{F}}
+a <- xu.tr[xu.tr$chr_num == 1 & xu.tr$strand == "+" & 
+        xu.tr$left <= 31702 & xu.tr$right >= 31702,]
+b <- vand.tr[vand.tr$chr_num == 1 & vand.tr$strand == "+" & 
+        vand.tr$left <= 31702 & vand.tr$right >= 31702,]
+c <- feat[feat$chr_num == 1 & feat$strand == "+" & 
+       feat$left <= 31702 & feat$right >= 31702,]
 
-d$xu.overlap<-sapply(1:nrow(d),function(r){xu_overlap(d$chr_num[r], d$pos[r])})
-d$feat.overlap<-sapply(1:nrow(d),function(r){feat_overlap(d$chr_num[r], d$pos[r])})
-d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r])})
+df <- bind_rows(a,b,c)
+if (nrow(df) != 0){
+df$diff <- 31702 - df$left
+mindiff <- min(df$diff)
+vals <- df[df$diff == mindiff,][1,]
+net.plus[net.plus$pos == 31702 & net.plus$chr_num == 1,][1,]$net_tot <- vals$net_tot
+net.plus[net.plus$pos == 31702 & net.plus$chr_num == 1,][1,]$net_dens <- vals$net_dens
+net.plus[net.plus$pos == 31702 & net.plus$chr_num == 1,][1,]$class <- vals$class
+}
+
+```
+
+Converting the datasets that were used here to csv so that the data can be uploaded on the server for the code.
+
+```{r}
+write.csv(net.plus, "net_plus.csv")
+write.csv(net.minus, "net_minus.csv")
+write.csv(xu.tr, "xu.csv")
+write.csv(vand.tr, "vand.csv")
+write.csv(feat, "feat.csv")
+```
+
+
+
+```{r}
+# row.names(d) <- as.character(d$chr_num*1e8 + d$pos)
+# 
+# d$xu.overlap <- 0
+# d$vand.overlap <- 0
+# d$feat.overlap <- 0
+# 
+# for (i in 1:nrow(xu.tr)){
+#   chr <- xu.tr[i, "chr_num"]
+#   left <- xu.tr[i, "left"] + chr*1e8
+#   right <- xu.tr[i, "right"] + chr*1e8
+#   for (j in left:right){
+#     if (as.character(j) %in% d)
+#     d[as.character(j), "xu.overlap"] = d[as.character(j), "xu.overlap"] + 1
+#   }
+# }
+# 
+# for (i in 1:nrow(vand.tr)){
+#   chr <- vand.tr[i, "chr_num"]
+#   left <- vand.tr[i, "left"]
+#   right <- vand.tr[i, "right"]
+#   for (j in left:right){
+#     vand.overlap[j] = vand.overlap[j] + 1
+#   }
+# }
+# 
+# for (i in 1:nrow(feat)){
+#   chr <- feat[i, "chr_num"]
+#   left <- feat[i, "left"]
+#   right <- feat[i, "right"]
+#   for (j in left:right){
+#     feat.overlap[j] = feat.overlap[j] + 1
+#   }
+# }
+# 
+# 
+# d$xu.overlap <- xu.overlap
+# d$vand.overlap <- vand.overlap
+# d$feat.overlap <- feat.overlap
+```
+
+
+
+```{r}
+# # for each site in the genome, determine the direction and magnitude of the most likely transcript
+# 
+# # functions to check for overlap with each feature type
+# xu_overlap<-function(chr.i, pos.i){if(nrow(xu.tr[xu.tr$chr_num==chr.i & xu.tr$left<=pos.i & xu.tr$right>=pos.i,])>0){T}else{F}}
+# feat_overlap<-function(chr.i, pos.i){if(nrow(feat[feat$chr_num==chr.i & feat$left<=pos.i & feat$right>=pos.i,])>0){T}else{F}}
+# vand_overlap<-function(chr.i, pos.i){if(nrow(vand.tr[vand.tr$chr_num==chr.i & vand.tr$left<=pos.i & vand.tr$right>=pos.i,])>0){T}else{F}}
+# 
+# d$xu.overlap<-sapply(1:nrow(d),function(r){xu_overlap(d$chr_num[r], d$pos[r])})
+# d$feat.overlap<-sapply(1:nrow(d),function(r){feat_overlap(d$chr_num[r], d$pos[r])})
+# d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r])})
 
 ```
 
@@ -375,7 +438,7 @@ d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r]
 # 
 # for(r in c(1:nrow(d))){
 # 	if(r %% 1000 == 0){cat(r, file=error.file, sep=" ")}
-# 	
+# 
 # 	if(d$xu.overlap[r]==F & d$feat.overlap[r]==F & d$vand.overlap[r]==F){
 # 		d$transcribed[r]<-F
 # 		d$net_tot[r]<-0
@@ -396,7 +459,7 @@ d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r]
 # 		if(d$vand.overlap[r]){
 # 			dt<-rbind(dt, vand.tr[vand.tr$chr_num==d$chr_num[r] & vand.tr$left<=d$pos[r] & vand.tr$right>=d$pos[r],])
 # 		}
-# 		
+# 
 # 		done<-F
 # 		# just one feature
 # 		if(nrow(dt)==1){
@@ -408,8 +471,8 @@ d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r]
 # 			d$len[r]<-dt$len[1]
 # 			done<-T
 # 		}
-# 		
-# 		# two or more features all on the same strand -- choose transcript where site is closest to transcript start; 
+# 
+# 		# two or more features all on the same strand -- choose transcript where site is closest to transcript start;
 # 		#  if there is a tie choose the longest transcript; if there is still a tie choose the first transcript in the list (by default)
 # 		if(done==F & nrow(dt)>1 & length(unique(dt$strand))==1){
 # 			d$tr.strand[r]<-as.character(dt$strand[1])
@@ -436,7 +499,7 @@ d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r]
 # 				done<-T
 # 			}
 # 		}
-# 			
+# 
 # 		# two or more features with some on each strand -- same rules as above
 # 		if(done==F & nrow(dt)>1 & length(unique(dt$strand))>1){
 # 			dt$dist<-sapply(c(1:nrow(dt)),function(x){
@@ -446,7 +509,7 @@ d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r]
 # 					return(dt$right[x]-d$pos[r])
 # 				}
 # 			})
-# 			
+# 
 # 			dt.sub<-dt[dt$dist==min(dt$dist),]
 # 			if(nrow(dt.sub==1)){
 # 				d$net_tot[r]<-dt.sub$net_tot[1]
@@ -472,6 +535,21 @@ d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r]
 ```
 
 
+In the mean time, adding in some replication data. Loading the data and adding the required column.
+
+```{r}
+# add replication information
+
+# replication dynamics
+rep.dynamics.hap<-read.delim("replication_data/Muller_rep_times_hap.txt")
+rep.dynamics.hap$chr<-sapply(rep.dynamics.hap$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
+rep.dynamics.hap$start<-rep.dynamics.hap$pos-500; rep.dynamics.hap$end<-rep.dynamics.hap$pos+499
+
+rep.dynamics.dip<-read.delim("replication_data/Muller_rep_times_dip.txt")
+rep.dynamics.dip$chr<-sapply(rep.dynamics.dip$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
+rep.dynamics.dip$start<-rep.dynamics.dip$pos-500; rep.dynamics.dip$end<-rep.dynamics.dip$pos+499
+
+```
 
 
 
@@ -486,19 +564,7 @@ d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r]
  
 
 
-# 
-# #_____________________________________________________________________________________________________________________________________
-# #_____________________________________________________________________________________________________________________________________
-# # add replication information
-# 
-# # replication dynamics
-# rep.dynamics.hap<-read.delim("transcription_data/Muller_rep_times_hap.txt")
-# rep.dynamics.hap$chr<-sapply(rep.dynamics.hap$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
-# rep.dynamics.hap$start<-rep.dynamics.hap$pos-500; rep.dynamics.hap$end<-rep.dynamics.hap$pos+499
-# rep.dynamics.dip<-read.delim("transcription_data/Muller_rep_times_dip.txt")
-# rep.dynamics.dip$chr<-sapply(rep.dynamics.dip$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
-# rep.dynamics.dip$start<-rep.dynamics.dip$pos-500; rep.dynamics.dip$end<-rep.dynamics.dip$pos+499
-# 
+ 
 # # for each chromosome fit a loess model to the data, with span = 50kb
 # loess.span<-50000
 # loess.models.hap<-list()
