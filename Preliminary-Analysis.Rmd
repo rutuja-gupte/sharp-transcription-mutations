@@ -361,181 +361,9 @@ write.csv(vand.tr, "vand.csv")
 write.csv(feat, "feat.csv")
 ```
 
+Process id was 25251 
 
-
-```{r}
-# row.names(d) <- as.character(d$chr_num*1e8 + d$pos)
-# 
-# d$xu.overlap <- 0
-# d$vand.overlap <- 0
-# d$feat.overlap <- 0
-# 
-# for (i in 1:nrow(xu.tr)){
-#   chr <- xu.tr[i, "chr_num"]
-#   left <- xu.tr[i, "left"] + chr*1e8
-#   right <- xu.tr[i, "right"] + chr*1e8
-#   for (j in left:right){
-#     if (as.character(j) %in% d)
-#     d[as.character(j), "xu.overlap"] = d[as.character(j), "xu.overlap"] + 1
-#   }
-# }
-# 
-# for (i in 1:nrow(vand.tr)){
-#   chr <- vand.tr[i, "chr_num"]
-#   left <- vand.tr[i, "left"]
-#   right <- vand.tr[i, "right"]
-#   for (j in left:right){
-#     vand.overlap[j] = vand.overlap[j] + 1
-#   }
-# }
-# 
-# for (i in 1:nrow(feat)){
-#   chr <- feat[i, "chr_num"]
-#   left <- feat[i, "left"]
-#   right <- feat[i, "right"]
-#   for (j in left:right){
-#     feat.overlap[j] = feat.overlap[j] + 1
-#   }
-# }
-# 
-# 
-# d$xu.overlap <- xu.overlap
-# d$vand.overlap <- vand.overlap
-# d$feat.overlap <- feat.overlap
-```
-
-
-
-```{r}
-# # for each site in the genome, determine the direction and magnitude of the most likely transcript
-# 
-# # functions to check for overlap with each feature type
-# xu_overlap<-function(chr.i, pos.i){if(nrow(xu.tr[xu.tr$chr_num==chr.i & xu.tr$left<=pos.i & xu.tr$right>=pos.i,])>0){T}else{F}}
-# feat_overlap<-function(chr.i, pos.i){if(nrow(feat[feat$chr_num==chr.i & feat$left<=pos.i & feat$right>=pos.i,])>0){T}else{F}}
-# vand_overlap<-function(chr.i, pos.i){if(nrow(vand.tr[vand.tr$chr_num==chr.i & vand.tr$left<=pos.i & vand.tr$right>=pos.i,])>0){T}else{F}}
-# 
-# d$xu.overlap<-sapply(1:nrow(d),function(r){xu_overlap(d$chr_num[r], d$pos[r])})
-# d$feat.overlap<-sapply(1:nrow(d),function(r){feat_overlap(d$chr_num[r], d$pos[r])})
-# d$vand.overlap<-sapply(1:nrow(d),function(r){vand_overlap(d$chr_num[r], d$pos[r])})
-
-```
-
-
-
-```{r}
-
-# error.file<-file(paste("chr",chr.num,"messages.txt",sep=""), open="at")
-# sink(error.file, type="message")
-# 
-# 
-# d$transcribed<-NA
-# d$net_tot<-NA
-# d$net_dens<-NA
-# d$net_peak<-NA
-# d$net_warn<-NA
-# d$tr.strand<-NA
-# d$len<-NA
-# 
-# for(r in c(1:nrow(d))){
-# 	if(r %% 1000 == 0){cat(r, file=error.file, sep=" ")}
-# 
-# 	if(d$xu.overlap[r]==F & d$feat.overlap[r]==F & d$vand.overlap[r]==F){
-# 		d$transcribed[r]<-F
-# 		d$net_tot[r]<-0
-# 		d$net_dens[r]<-0
-# 		d$net_peak[r]<-0
-# 		d$net_warn[r]<-F
-# 		d$tr.strand[r]<-NA
-# 		d$len[r]<-NA
-# 	}else{
-# 		d$transcribed[r]<-T
-# 		dt<-data.frame()
-# 		if(d$xu.overlap[r]){
-# 			dt<-rbind(dt, xu.tr[xu.tr$chr_num==d$chr_num[r] & xu.tr$left<=d$pos[r] & xu.tr$right>=d$pos[r],])
-# 		}
-# 		if(d$feat.overlap[r]){
-# 			dt<-rbind(dt, feat[feat$chr_num==d$chr_num[r] & feat$left<=d$pos[r] & feat$right>=d$pos[r],])
-# 		}
-# 		if(d$vand.overlap[r]){
-# 			dt<-rbind(dt, vand.tr[vand.tr$chr_num==d$chr_num[r] & vand.tr$left<=d$pos[r] & vand.tr$right>=d$pos[r],])
-# 		}
-# 
-# 		done<-F
-# 		# just one feature
-# 		if(nrow(dt)==1){
-# 			d$net_tot[r]<-dt$net_tot[1]
-# 			d$net_dens[r]<-dt$net_dens[1]
-# 			d$net_peak[r]<-dt$net_peak[1]
-# 			d$net_warn[r]<-dt$net_warn[1]
-# 			d$tr.strand[r]<-as.character(dt$strand[1])
-# 			d$len[r]<-dt$len[1]
-# 			done<-T
-# 		}
-# 
-# 		# two or more features all on the same strand -- choose transcript where site is closest to transcript start;
-# 		#  if there is a tie choose the longest transcript; if there is still a tie choose the first transcript in the list (by default)
-# 		if(done==F & nrow(dt)>1 & length(unique(dt$strand))==1){
-# 			d$tr.strand[r]<-as.character(dt$strand[1])
-# 			if(as.character(dt$strand[1])=="+"){
-# 				dt$dist<-d$pos[r]-dt$left
-# 			}else{
-# 				dt$dist<-dt$right-d$pos[r]
-# 			}
-# 			dt.sub<-dt[dt$dist==min(dt$dist),]
-# 			if(nrow(dt.sub==1)){
-# 				d$net_tot[r]<-dt.sub$net_tot[1]
-# 				d$net_dens[r]<-dt.sub$net_dens[1]
-# 				d$net_peak[r]<-dt.sub$net_peak[1]
-# 				d$net_warn[r]<-dt.sub$net_warn[1]
-# 				d$len[r]<-dt.sub$len[1]
-# 				done<-T
-# 			}else{
-# 				dt.sub2<-dt.sub[dt.sub$len==max(dt.sub$len),]
-# 				d$net_tot[r]<-dt.sub2$net_tot[1]
-# 				d$net_dens[r]<-dt.sub2$net_dens[1]
-# 				d$net_peak[r]<-dt.sub2$net_peak[1]
-# 				d$net_warn[r]<-dt.sub2$net_warn[1]
-# 				d$len[r]<-dt.sub2$len[1]
-# 				done<-T
-# 			}
-# 		}
-# 
-# 		# two or more features with some on each strand -- same rules as above
-# 		if(done==F & nrow(dt)>1 & length(unique(dt$strand))>1){
-# 			dt$dist<-sapply(c(1:nrow(dt)),function(x){
-# 				if(as.character(dt$strand[x])=="+"){
-# 					return(d$pos[r]-dt$left[x])
-# 				}else{
-# 					return(dt$right[x]-d$pos[r])
-# 				}
-# 			})
-# 
-# 			dt.sub<-dt[dt$dist==min(dt$dist),]
-# 			if(nrow(dt.sub==1)){
-# 				d$net_tot[r]<-dt.sub$net_tot[1]
-# 				d$net_dens[r]<-dt.sub$net_dens[1]
-# 				d$net_peak[r]<-dt.sub$net_peak[1]
-# 				d$net_warn[r]<-dt.sub$net_warn[1]
-# 				d$tr.strand[r]<-as.character(dt.sub$strand[1])
-# 				d$len[r]<-dt.sub$len[1]
-# 				done<-T
-# 			}else{
-# 				dt.sub2<-dt.sub[dt.sub$len==max(dt.sub$len),]
-# 				d$net_tot[r]<-dt.sub2$net_tot[1]
-# 				d$net_dens[r]<-dt.sub2$net_dens[1]
-# 				d$net_peak[r]<-dt.sub2$net_peak[1]
-# 				d$net_warn[r]<-dt.sub2$net_warn[1]
-# 				d$tr.strand[r]<-as.character(dt.sub2$strand[1])
-# 				d$len[r]<-dt.sub2$len[1]
-# 				done<-T
-# 			}
-# 		}
-# 	}
-# }
-```
-
-
-In the mean time, adding in some replication data. Loading the data and adding the required column.
+In the mean time, adding in some replication data. Loading the data and adding the required column. The replication data is for 1000 bp windows. THe positions in the data are the middle positions. 
 
 ```{r}
 # add replication information
@@ -548,6 +376,73 @@ rep.dynamics.hap$start<-rep.dynamics.hap$pos-500; rep.dynamics.hap$end<-rep.dyna
 rep.dynamics.dip<-read.delim("replication_data/Muller_rep_times_dip.txt")
 rep.dynamics.dip$chr<-sapply(rep.dynamics.dip$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
 rep.dynamics.dip$start<-rep.dynamics.dip$pos-500; rep.dynamics.dip$end<-rep.dynamics.dip$pos+499
+
+```
+
+Exploring this dataset
+
+```{r}
+rep.dynamics.hap %>% filter(chr_num == 1) %>% ggplot() + geom_line(aes(x=pos, y=ratio))
+
+rep.dynamics.hap %>% ggplot() + geom_line(aes(x=pos, y=ratio, color=chr_num)) + facet_wrap(vars(chr_num))
+```
+
+Since we only have discrete values using loess so that we can get the derivatives later. Also because we need to make it smooth in a way that makes sense for further analysis. Making the span as small as possible.
+
+```{r}
+# for each chromosome fit a loess model to the data, with span = 50kb
+loess.span<-20000
+loess.models.hap<-list()
+for(chr_num in c(1:16)){
+	chr.data<-rep.dynamics.hap[rep.dynamics.hap$chr_num==chr_num,]
+	mod<-loess(ratio~pos, chr.data,span=loess.span/max(chr.data$pos))
+	loess.models.hap<-c(loess.models.hap, list(mod))
+}
+loess.models.dip<-list()
+for(chr_num in c(1:16)){
+	chr.data<-rep.dynamics.dip[rep.dynamics.dip$chr_num==chr_num,]
+	mod<-loess(ratio~pos, chr.data,span=loess.span/max(chr.data$pos))
+	loess.models.dip<-c(loess.models.dip, list(mod))
+}
+
+```
+
+
+Visualizing the estimated models
+
+```{r}
+chromosome.1 <- rep.dynamics.hap %>% filter(chr_num == 1)
+
+ggplot() + geom_line(aes(x=chromosome.1$pos, y=chromosome.1$ratio), color='red') +
+  geom_line(aes(x=chromosome.1$pos, y=predict(loess.models.hap[[1]])), color='blue')
+
+chromosome.1 <- rep.dynamics.dip %>% filter(chr_num == 1)
+
+ggplot() + geom_line(aes(x=chromosome.1$pos, y=chromosome.1$ratio), color='red') +
+  geom_line(aes(x=chromosome.1$pos, y=predict(loess.models.dip[[1]])), color='blue')
+```
+
+
+```{r}
+
+# functions to determine the derivative of the loess fit for a given chromosome and position
+nderiv<-function(fit, x, eps=1e-5){(predict(fit, x + eps) - predict(fit, x - eps))/(2 * eps)}
+
+# nderiv will return NA at the boundary, so add or subtract 1 to get the slope
+find.rep.slope<-function(chr, pos, model.list){
+	mod<-model.list[[which(chr_names2==chr)]]
+	sl<-nderiv(mod, pos)
+	if(is.na(sl)){sl<-nderiv(mod, pos+1);if(is.na(sl)){sl<-nderiv(mod, pos-1)}}
+	return(sl)
+}
+
+# determine slope at each pos
+rep.dynamics.hap$rep.slope<-sapply(1:nrow(rep.dynamics.hap),function(r){
+	find.rep.slope(rep.dynamics.hap$chr[r],rep.dynamics.hap$pos[r],loess.models.hap)
+})
+rep.dynamics.dip$rep.slope<-sapply(1:nrow(rep.dynamics.dip),function(r){
+	find.rep.slope(rep.dynamics.dip$chr[r],rep.dynamics.dip$pos[r],loess.models.dip)
+})
 
 ```
 
@@ -565,39 +460,6 @@ rep.dynamics.dip$start<-rep.dynamics.dip$pos-500; rep.dynamics.dip$end<-rep.dyna
 
 
  
-# # for each chromosome fit a loess model to the data, with span = 50kb
-# loess.span<-50000
-# loess.models.hap<-list()
-# for(chr_num in c(1:16)){
-# 	chr.data<-rep.dynamics.hap[rep.dynamics.hap$chr_num==chr_num,]
-# 	mod<-loess(ratio~pos, chr.data,span=loess.span/max(chr.data$pos))
-# 	loess.models.hap<-c(loess.models.hap, list(mod))
-# }
-# loess.models.dip<-list()
-# for(chr_num in c(1:16)){
-# 	chr.data<-rep.dynamics.dip[rep.dynamics.dip$chr_num==chr_num,]
-# 	mod<-loess(ratio~pos, chr.data,span=loess.span/max(chr.data$pos))
-# 	loess.models.dip<-c(loess.models.dip, list(mod))
-# }
-# 
-# # functions to determine the derivative of the loess fit for a given chromosome and position
-# nderiv<-function(fit, x, eps=1e-5){(predict(fit, x + eps) - predict(fit, x - eps))/(2 * eps)}
-# 
-# # nderiv will return NA at the boundary, so add or subtract 1 to get the slope
-# find.rep.slope<-function(chr, pos, model.list){
-# 	mod<-model.list[[which(chr_names2==chr)]]
-# 	sl<-nderiv(mod, pos)
-# 	if(is.na(sl)){sl<-nderiv(mod, pos+1);if(is.na(sl)){sl<-nderiv(mod, pos-1)}}
-# 	return(sl)
-# }
-# 
-# # determine slope at each pos 
-# rep.dynamics.hap$rep.slope<-sapply(1:nrow(rep.dynamics.hap),function(r){
-# 	find.rep.slope(rep.dynamics.hap$chr[r],rep.dynamics.hap$pos[r],loess.models.hap)
-# })
-# rep.dynamics.dip$rep.slope<-sapply(1:nrow(rep.dynamics.dip),function(r){
-# 	find.rep.slope(rep.dynamics.dip$chr[r],rep.dynamics.dip$pos[r],loess.models.dip)
-# })
 # 
 # d$rep.strand.hap<-NA
 # d$rep.strand.dip<-NA
