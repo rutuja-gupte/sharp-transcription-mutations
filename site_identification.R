@@ -6,8 +6,16 @@ xu.tr <- read.csv("data/xu.csv")
 vand.tr <- read.csv("data/vand.csv")
 feat <- read.csv("data/feat.csv")
 
+curr.chr <- 0
+print("Running net.plus")
 for (i in 1:nrow(net.plus)){
   chr <- net.plus[i,"chr_num"]
+  if (curr.chr != chr) {
+    print(Sys.time())
+    print("Now on:")
+    print(chr)
+    curr.chr = chr
+  }
   pos <- net.plus[i,"pos"]
   a <- xu.tr[xu.tr$chr_num == chr & xu.tr$strand == "+" & 
                xu.tr$left <= pos & xu.tr$right >= pos,]
@@ -27,8 +35,16 @@ for (i in 1:nrow(net.plus)){
   }
 }
 
+curr.chr <- 0
+print("Running net.minus")
 for (i in 1:nrow(net.minus)){
   chr <- net.minus[i,"chr_num"]
+  if (curr.chr != chr) {
+    print(Sys.time())
+    print("Now on:")
+    print(chr)
+    curr.chr = chr
+  }
   pos <- net.minus[i,"pos"]
   a <- xu.tr[xu.tr$chr_num == chr & xu.tr$strand == "+" & 
                xu.tr$left <= pos & xu.tr$right >= pos,]
@@ -49,4 +65,4 @@ for (i in 1:nrow(net.minus)){
 }
 
 write.csv(net.plus, "net_plus_sites.csv")
-write.csv(net.plus, "net_minus_sites.csv")
+write.csv(net.minus, "net_minus_sites.csv")
