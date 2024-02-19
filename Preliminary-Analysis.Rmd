@@ -95,7 +95,6 @@ net.plus %>% filter(chr_num == 1) %>% filter(pos > 70000 & pos < 75000) %>% ggpl
 ```
 
 
-
 Importing power to detect mutations data. This will later be used to store per base information for the entire genome.
 
 ```{r}
@@ -317,15 +316,14 @@ vand.tr$class <- "XUTs"
 vand.tr <- vand.tr %>% relocate(chr_num, left, right, strand)
 feat <- feat %>% rename("class" = "feat_type")
 feat <- feat %>% relocate(chr_num, left, right, strand)
-
-net.plus$net_tot <- 0
-net.plus$net_dens <- 0
-net.plus$class <- "None"
-
-net.minus$net_tot <- 0
-net.minus$net_dens <- 0
-net.minus$class <- "None"
 ```
+
+Adding a final round of removing features here. Hopefully, that stuff does not need to be touched again.
+
+```{r}
+feat <- feat %>% filter(class != "pseudogene")
+```
+
 
 
 Trying out the logic for one row. This code will be generalized and run on deepthought.
@@ -354,14 +352,66 @@ net.plus[net.plus$pos == 31702 & net.plus$chr_num == 1,][1,]$class <- vals$class
 Converting the datasets that were used here to csv so that the data can be uploaded on the server for the code.
 
 ```{r}
-write.csv(net.plus, "net_plus.csv")
-write.csv(net.minus, "net_minus.csv")
-write.csv(xu.tr, "xu.csv")
-write.csv(vand.tr, "vand.csv")
-write.csv(feat, "feat.csv")
+net.plus$net_tot <- 0
+net.plus$net_dens <- 0
+net.plus$class <- "None"
+
+net.minus$net_tot <- 0
+net.minus$net_dens <- 0
+net.minus$class <- "None"
+
+write.csv(net.plus, "data/net_plus.csv")
+write.csv(net.minus, "data/net_minus.csv")
+write.csv(xu.tr, "data/xu.csv")
+write.csv(vand.tr, "data/vand.csv")
+write.csv(feat, "data/feat.csv")
 ```
 
-Process id was 25251 
+Process id was 66173 - Warning! This one will not give the right results
+
+Running this for a smaller dataset (aka chromosome 3) to allow for exploratory analysis while the actual big code is running on the server (it is taking ridiculously long but there is little I can do about it).
+
+```{r}
+test.plus <- net.plus %>% filter(chr_num == 1 | chr_num == 3)
+test.minus <- net.minus %>% filter(chr_num == 1 | chr_num == 3)
+test.plus$net_tot <- 0
+test.plus$net_dens <- 0
+test.plus$class <- "None"
+
+test.minus$net_tot <- 0
+test.minus$net_dens <- 0
+test.minus$class <- "None"
+
+write.csv(test.plus, "data/test_plus.csv")
+write.csv(test.minus, "data/test_minus.csv")
+```
+
+Running test with PID 52620 (done)
+Running the code again with minor fixes at 69268 - Warning! This is the one that is likely to give the right results. But test the results thoroughly please.
+
+Loading the test data and moving ahead with. Just a reminder that the test data is chromosome 1 and 3 (both strands)
+
+```{r}
+test.minus <- read.csv("server_test_outs/test_minus_sites.csv")
+test.plus <- read.csv("server_test_outs/test_plus_sites.csv")
+```
+
+Testing this code and documenting the testing process
+
+```{r}
+test.plus %>% filter(net_tot != 0) %>% head()
+xu.tr %>% filter(9395 <= right & 9395 >= left)
+vand.tr %>% filter(9395 <= right & 9395 >= left)
+feat %>% filter(9395 <= right & 9395 >= left)
+
+test.minus %>% filter(net_tot != 0) %>% tail()
+xu.tr %>% filter(313240 <= right & 313240 >= left & chr_num == 3)
+vand.tr %>% filter(313240 <= right & 313240 >= left & chr_num == 3)
+feat %>% filter(313240 <= right & 313240 >= left & chr_num == 3)
+```
+
+Looks like it has worked. Now combining this data with the replication dataset
+
 
 In the mean time, adding in some replication data. Loading the data and adding the required column. The replication data is for 1000 bp windows. THe positions in the data are the middle positions. 
 
@@ -446,6 +496,59 @@ rep.dynamics.dip$rep.slope<-sapply(1:nrow(rep.dynamics.dip),function(r){
 
 ```
 
+Now combining this at least with the server test samples.
+
+```{r}
+d.test <- d %>% filter(chr_num == 1 | chr_num == 3)
+d.test <- d.test %>% left_join(test.minus[,c("pos", "chr_num", "net_tot", "net_dens", "class")], by=c('pos', 'chr_num'), suffix = c("", ".minus"))
+d.test <- d.test %>% rename("net_tot.minus" = "net_tot",
+                            "net_dens.minus" = "net_dens",
+                            "class.minus" = "class")
+d.test <- d.test %>% left_join(test.plus[,c("pos", "chr_num", "net_tot", "net_dens", "class")], by=c('pos', 'chr_num'), suffix = c("", ".plus"))
+d.test <- d.test %>% rename("net_tot.plus" = "net_tot",
+                            "net_dens.plus" = "net_dens",
+                            "class.plus" = "class")
+
+
+d.test$rep.strand.hap<-NA
+d.test$rep.strand.dip<-NA
+d.test$rep.ratio.hap<-NA
+d.test$rep.ratio.dip<-NA
+
+for(r in c(1:nrow(rep.dynamics.hap))){
+  i <- which(d.test$chr_num==rep.dynamics.hap$chr_num[r] & d.test$pos>=rep.dynamics.hap$start[r] & d.test$pos<=rep.dynamics.hap$end[r])
+  
+	d.test$rep.strand.hap[i]<-sign(rep.dynamics.hap$rep.slope[r])
+	d.test$rep.ratio.hap[i]<-rep.dynamics.hap$ratio[r]
+}
+
+
+for(r in c(1:nrow(rep.dynamics.dip))){
+  i <- which(d.test$chr_num==rep.dynamics.dip$chr_num[r] & d.test$pos>=rep.dynamics.dip$start[r] & d.test$pos<=rep.dynamics.dip$end[r])
+  
+	d.test$rep.strand.dip[i]<-sign(rep.dynamics.dip$rep.slope[r])
+	d.test$rep.ratio.dip[i]<-rep.dynamics.dip$ratio[r]
+}
+
+
+# d$rep.ratio.avg<-sapply(c(1:nrow(d)),function(r){(d$rep.ratio.hap[r]+d$rep.ratio.dip[r])/2})
+# 
+```
+
+
+
+***
+
+This is a placeholder for some text and code for combining the replication data with the overall output.
+
+***
+
+
+Reading in the mutation data
+
+```{r}
+mut <- load("mutation_data/Sharp_etal_variants")
+```
 
 
 
@@ -459,26 +562,6 @@ rep.dynamics.dip$rep.slope<-sapply(1:nrow(rep.dynamics.dip),function(r){
  
 
 
- 
-# 
-# d$rep.strand.hap<-NA
-# d$rep.strand.dip<-NA
-# for(r in c(1:nrow(rep.dynamics.hap))){
-# 	d$rep.strand.hap[which(d$chr==rep.dynamics.hap$chr[r] & d$pos>=rep.dynamics.hap$start[r] & d$pos<=rep.dynamics.hap$end[r])]<-sign(rep.dynamics.hap$rep.slope[r])
-# }
-# for(r in c(1:nrow(rep.dynamics.dip))){
-# 	d$rep.strand.dip[which(d$chr==rep.dynamics.dip$chr[r] & d$pos>=rep.dynamics.dip$start[r] & d$pos<=rep.dynamics.dip$end[r])]<-sign(rep.dynamics.dip$rep.slope[r])
-# }
-# d$rep.ratio.hap<-NA
-# d$rep.ratio.dip<-NA
-# for(r in c(1:nrow(rep.dynamics.hap))){
-# 	d$rep.ratio.hap[which(d$chr==rep.dynamics.hap$chr[r] & d$pos>=rep.dynamics.hap$start[r] & d$pos<=rep.dynamics.hap$end[r])]<-rep.dynamics.hap$ratio[r]
-# }
-# for(r in c(1:nrow(rep.dynamics.dip))){
-# 	d$rep.ratio.dip[which(d$chr==rep.dynamics.dip$chr[r] & d$pos>=rep.dynamics.dip$start[r] & d$pos<=rep.dynamics.dip$end[r])]<-rep.dynamics.dip$ratio[r]
-# }
-# d$rep.ratio.avg<-sapply(c(1:nrow(d)),function(r){(d$rep.ratio.hap[r]+d$rep.ratio.dip[r])/2})
-# 
 # 
 # 
 # write.table(d, paste("chr",chr.num,"results.txt",sep=""), quote=F,sep="\t",row.names=F)
