@@ -1,3 +1,7 @@
+args <- commandArgs(trailingOnly = TRUE)
+fname <- args[1]
+print(fname)
+
 library(dplyr)
 
 net.plus <- read.csv("data/net_plus.csv")
@@ -46,11 +50,11 @@ for (i in 1:nrow(net.minus)){
     curr.chr = chr
   }
   pos <- net.minus[i,"pos"]
-  a <- xu.tr[xu.tr$chr_num == chr & xu.tr$strand == "+" & 
+  a <- xu.tr[xu.tr$chr_num == chr & xu.tr$strand == "-" & 
                xu.tr$left <= pos & xu.tr$right >= pos,]
-  b <- vand.tr[vand.tr$chr_num == chr & vand.tr$strand == "+" & 
+  b <- vand.tr[vand.tr$chr_num == chr & vand.tr$strand == "-" & 
                  vand.tr$left <= pos & vand.tr$right >= pos,]
-  c <- feat[feat$chr_num == chr & feat$strand == "+" & 
+  c <- feat[feat$chr_num == chr & feat$strand == "-" & 
               feat$left <= pos & feat$right >= pos,]
   
   df <- bind_rows(a,b,c)
@@ -66,3 +70,5 @@ for (i in 1:nrow(net.minus)){
 
 write.csv(net.plus, "net_plus_sites.csv")
 write.csv(net.minus, "net_minus_sites.csv")
+
+print("Job done")
