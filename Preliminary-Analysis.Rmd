@@ -550,6 +550,34 @@ Reading in the mutation data
 mut <- load("mutation_data/Sharp_etal_variants")
 ```
 
+Filter to keep specific columns
+
+```{r}
+test.rv <- rv %>% select(CHROM, POS, REF, ALT, TYPE, RDH, MAT, ploidy, chr_copy_num, indel.type, genic, SGDID, mut.type)
+
+test.rv$chr_num <- sapply(test.rv$CHROM,function(i){which(chr_names2==i)})
+test.rv <- test.rv %>% rename("pos" = "POS")
+```
+
+Join with the big dataset
+
+```{r}
+d.test <- d.test %>% left_join(test.rv[,c("chr_num", "pos", "ALT", "TYPE", "MAT", "ploidy", "allele.freq", "chr_copy_num", "indel.type", "NCALLED")], by = c("chr_num", "pos"))
+```
+
+
+Now that everything is all together. Some exploratory plots for visualization and trial models.
+
+```{r}
+d.test.1 <- d.test %>% filter(chr_num == "1")
+d.test.3 <- d.test %>% filter(chr_num == "3")
+
+d.test.1 %>% ggplot() +
+  geom_point(aes(x=pos, y=hap.wt))
+
+test.1.1 <- d.test.1 %>% filter(!is.na(allele.freq.x))
+```
+
 
 
 ```{r}
