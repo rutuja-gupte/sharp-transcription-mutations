@@ -157,7 +157,8 @@ vand.tr <- vand.tr %>% select(-chr_name)
 ```
 
 
-SGD features dataset downloaded version is from January 14, 2017. 
+SGD features dataset downloaded version is from January 14, 2017.
+Watson strand is 5'-3', Crick strand is 3'-5'. They have been labelled + and - respectively for convenience
 
 ```{r}
 feat<-read.csv("transcription_data/features.csv",h=T)
@@ -367,8 +368,6 @@ write.csv(vand.tr, "data/vand.csv")
 write.csv(feat, "data/feat.csv")
 ```
 
-Process id was 66173 - Warning! This one will not give the right results
-
 Running this for a smaller dataset (aka chromosome 3) to allow for exploratory analysis while the actual big code is running on the server (it is taking ridiculously long but there is little I can do about it).
 
 ```{r}
@@ -387,7 +386,17 @@ write.csv(test.minus, "data/test_minus.csv")
 ```
 
 Running test with PID 52620 (done)
-Running the code again with minor fixes at 69268 - Warning! This is the one that is likely to give the right results. But test the results thoroughly please.
+
+Running the code in modules.
+PID:
+53184
+53371
+53384
+53394
+53404
+53414
+53424
+53434
 
 Loading the test data and moving ahead with. Just a reminder that the test data is chromosome 1 and 3 (both strands)
 
@@ -535,6 +544,36 @@ for(r in c(1:nrow(rep.dynamics.dip))){
 # 
 ```
 
+#### Sign of replication ratio
+
+Used to know whether there will be a headon or cotranscriptional collision in the region. Head on is obviously more detrimental.
+
+```{r}
+features<-read.csv("transcription_data/features.csv",h=T)
+features<-features[,c(2:5,10:13)]
+names(features)<-c("SGDID","feat_type","feat_qual","name", "chr_num", "start", "stop", "strand_name")
+features<-features[features$feat_qual != "Dubious",]
+ori <- features %>% filter(feat_type == "ARS")
+
+```
+
+
+```{r}
+ori.1 <- ori %>% filter(chr_num == 1)
+
+d.test.1 %>% filter(!is.na(rep.strand.hap)) %>% ggplot() +
+  geom_point(aes(x=pos, y=rep.strand.hap)) +
+  geom_vline(xintercept=ori.1$start, color='red')
+```
+
+
+```{r}
+ori.3 <- ori %>% filter(chr_num == 3)
+
+d.test.3 %>% filter(!is.na(rep.strand.hap)) %>% ggplot() +
+  geom_point(aes(x=pos, y=rep.strand.hap)) +
+  geom_vline(xintercept=ori.3$start, color='red')
+```
 
 
 ***
@@ -568,6 +607,8 @@ d.test <- d.test %>% left_join(test.rv[,c("chr_num", "pos", "ALT", "TYPE", "MAT"
 
 Now that everything is all together. Some exploratory plots for visualization and trial models.
 
+
+
 ```{r}
 d.test.1 <- d.test %>% filter(chr_num == "1")
 d.test.3 <- d.test %>% filter(chr_num == "3")
@@ -575,30 +616,12 @@ d.test.3 <- d.test %>% filter(chr_num == "3")
 d.test.1 %>% ggplot() +
   geom_point(aes(x=pos, y=hap.wt))
 
-test.1.1 <- d.test.1 %>% filter(!is.na(allele.freq.x))
+test.1.1 <- d.test.1 %>% filter(!is.na(allele.freq))
+test.3.1 <- d.test.3 %>% filter(!is.na(allele.freq))
 ```
 
+Finding headon collision hotspots. Places where replication sign (rep.strand.hap and rep.strand.dip) and transcription sign match at a transcription hotspot will be more prone to headon collisions that can lead to mutations.
 
+Using linear regression to see if we can predict likelihood (correct my statistical wording) of mutations
 
-```{r}
-# default.args<-list(chr.num=0)
-
-# args <- commandArgs(trailingOnly=T,asValues=T,defaults=default.args,excludeReserved=T)
-# keys <- attachLocally(args)
-# 
-
- 
-
-
-# 
-# 
-# write.table(d, paste("chr",chr.num,"results.txt",sep=""), quote=F,sep="\t",row.names=F)
-# 
-# 
-# 
-# 
-# 
-# 
-
-```
 

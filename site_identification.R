@@ -1,17 +1,19 @@
 args <- commandArgs(trailingOnly = TRUE)
+# arg should be a number
 fname <- args[1]
 print(fname)
 
 library(dplyr)
 
-net.plus <- read.csv("data/net_plus.csv")
-net.minus <- read.csv("data/net_minus.csv")
+net.plus <- read.csv(paste0("module_data/net_plus_", fname, ".csv"))
+net.minus <- read.csv(paste0("module_data/net_minus_", fname, ".csv"))
 xu.tr <- read.csv("data/xu.csv")
 vand.tr <- read.csv("data/vand.csv")
 feat <- read.csv("data/feat.csv")
 
 curr.chr <- 0
 print("Running net.plus")
+print(head(net.plus))
 for (i in 1:nrow(net.plus)){
   chr <- net.plus[i,"chr_num"]
   if (curr.chr != chr) {
@@ -41,6 +43,7 @@ for (i in 1:nrow(net.plus)){
 
 curr.chr <- 0
 print("Running net.minus")
+print(head(net.minus))
 for (i in 1:nrow(net.minus)){
   chr <- net.minus[i,"chr_num"]
   if (curr.chr != chr) {
@@ -68,7 +71,7 @@ for (i in 1:nrow(net.minus)){
   }
 }
 
-write.csv(net.plus, "net_plus_sites.csv")
-write.csv(net.minus, "net_minus_sites.csv")
+write.csv(net.plus, paste0("server_data/net_plus_", fname, ".csv"))
+write.csv(net.minus, paste0("server_data/net_minus_", fname, ".csv"))
 
 print("Job done")
