@@ -7,7 +7,23 @@ xu.tr <- read.csv("data/xu.csv")
 vand.tr <- read.csv("data/vand.csv")
 feat <- read.csv("data/feat.csv")
 
-profvis({
+merged = bind_rows(xu.tr,vand.tr,feat)
+merged.plus = merged[merged$strand == "+",]
+merged.minus = merged[merged$strand == "-",]
+
+net.plus.pos.chr = paste(net.plus$pos,net.plus$chr_num,sep="-")
+net.plus.minus.chr = paste(net.minus$pos,net.minus$chr_num,sep="-")
+
+# profvis({
+
+search.sign = function(pos.chr,left,right,strand,chr_num){
+  split = as.numeric(strsplit(pos.chr,"-")[[1]])
+  pos = split[1]
+  chr = split[2]
+  
+  chr_num == chr & left <= pos & right >= pos
+}
+
 
 curr.chr <- 0
 print("Running net.plus")
@@ -71,6 +87,6 @@ write.csv(net.plus, "test_plus_sites2.csv")
 write.csv(net.minus, "test_minus_sites2.csv")
 
 
-})
+# })
 
 
