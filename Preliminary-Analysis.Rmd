@@ -422,6 +422,25 @@ feat %>% filter(313240 <= right & 313240 >= left & chr_num == 3)
 Looks like it has worked. Now combining this data with the replication dataset
 
 
+Reassembing the server files into one dataframe
+
+```{r}
+l <- list.files("server_data")
+ldfs.plus <- lapply(l[startsWith(l, 'net_plus')], function(r){
+  read.csv(paste0("server_data/", r))
+})
+
+ldfs.minus <- lapply(l[startsWith(l, 'net_minus')], function(r){
+  read.csv(paste0("server_data/", r))
+})
+
+df.plus <- bind_rows(ldfs.plus)
+df.minus <- bind_rows(ldfs.minus)
+```
+
+**df.plus and df.minus** contain processed data from server.
+
+
 In the mean time, adding in some replication data. Loading the data and adding the required column. The replication data is for 1000 bp windows. THe positions in the data are the middle positions. 
 
 ```{r}
@@ -578,9 +597,38 @@ d.test.3 %>% filter(!is.na(rep.strand.hap)) %>% ggplot() +
 
 ***
 
-This is a placeholder for some text and code for combining the replication data with the overall output.
+Combining the replication data with the entire server outputs.
 
 ***
+
+```{r}
+d <- d %>% left_join(df.minus[,c("pos", "chr_num", "net_tot", "net_dens", "class")], by=c('pos', 'chr_num'), suffix = c("", ".minus"))
+d <- d %>% rename("net_tot.minus" = "net_tot",
+                            "net_dens.minus" = "net_dens",
+                            "class.minus" = "class")
+d <- d %>% left_join(df.plus[,c("pos", "chr_num", "net_tot", "net_dens", "class")], by=c('pos', 'chr_num'), suffix = c("", ".plus"))
+d <- d %>% rename("net_tot.plus" = "net_tot",
+                            "net_dens.plus" = "net_dens",
+                            "class.plus" = "class")
+
+d$pos500 <- ((d$pos-1) %/% 1000) * 1000 + 501
+
+d <- d %>% left_join(rep.dynamics.hap[,c("pos","chr_num", "ratio", "rep.slope")], by=c("chr_num", "pos500"="pos"))
+
+d <- d %>% rename("rep.ratio.hap" = "ratio",
+                            "rep.slope.hap" = "rep.slope")
+
+d <- d %>% left_join(rep.dynamics.dip[,c("pos","chr_num", "ratio", "rep.slope")], by=c("chr_num", "pos500"="pos"))
+
+d <- d %>% rename("rep.ratio.dip" = "ratio",
+                            "rep.slope.dip" = "rep.slope")
+
+d$rep.strand.hap = sign(d$rep.slope.hap)
+d$rep.strand.dip = sign(d$rep.slope.dip)
+```
+
+
+
 
 
 Reading in the mutation data
@@ -592,7 +640,7 @@ mut <- load("mutation_data/Sharp_etal_variants")
 Filter to keep specific columns
 
 ```{r}
-test.rv <- rv %>% select(CHROM, POS, REF, ALT, TYPE, RDH, MAT, ploidy, chr_copy_num, indel.type, genic, SGDID, mut.type)
+test.rv <- rv %>% select(CHROM, POS, REF, ALT, TYPE, RDH, MAT, ploidy, allele.freq, chr_copy_num, aneu11, indel.type, genic, mut.type, NCALLED)
 
 test.rv$chr_num <- sapply(test.rv$CHROM,function(i){which(chr_names2==i)})
 test.rv <- test.rv %>% rename("pos" = "POS")
@@ -602,6 +650,12 @@ Join with the big dataset
 
 ```{r}
 d.test <- d.test %>% left_join(test.rv[,c("chr_num", "pos", "ALT", "TYPE", "MAT", "ploidy", "allele.freq", "chr_copy_num", "indel.type", "NCALLED")], by = c("chr_num", "pos"))
+```
+
+Joining with actual big dataset
+
+```{r}
+d <- d %>% left_join(test.rv, by = c("chr_num", "pos"))
 ```
 
 
@@ -624,4 +678,12 @@ Finding headon collision hotspots. Places where replication sign (rep.strand.hap
 
 Using linear regression to see if we can predict likelihood (correct my statistical wording) of mutations
 
+ploidy as a predictor may not be the most helpful thing in the world.
+Scale the predictors.
+
+Saving d in a file and working with further analysis in a different file. This is too many variables and too many lines now.
+
+```{r}
+write.csv(d, "final_data/d.csv")
+```
 
