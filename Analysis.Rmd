@@ -997,7 +997,7 @@ test.cds %>% filter(net_tot != 0) %>% ggplot() +
   geom_point(mapping = aes(as.character(SNM), Mean), data = Stats.cds) +
   geom_errorbar(mapping = aes(x = as.character(SNM), ymin = CI_L, ymax = CI_U), 
                 data = Stats.cds, width = 0.2) +
-  scale_x_discrete(name ="SNM", 
+  scale_x_discrete(name ="SNM in Coding Sequence", 
                     labels=c("Absent", "Present")) +
   ylab("Total Number of Transcripts") +
   scale_y_log10(limits = c(1, max(test.df$net_tot))) 
@@ -1008,7 +1008,7 @@ test.nocds %>% filter(net_tot != 0) %>% ggplot() +
   geom_point(mapping = aes(as.character(SNM), Mean), data = Stats.nocds) +
   geom_errorbar(mapping = aes(x = as.character(SNM), ymin = CI_L, ymax = CI_U), 
                 data = Stats.nocds, width = 0.2) +
-  scale_x_discrete(name ="SNM", 
+  scale_x_discrete(name ="SNM in Non-Coding Sequence", 
                     labels=c("Absent", "Present")) +
   ylab("Total Number of Transcripts") +
   scale_y_log10(limits = c(1, max(test.df$net_tot)))
@@ -1034,6 +1034,23 @@ ggplot() +
   
 ```
 
+
+```{r}
+ggplot() +
+  geom_density(aes(x=rep.ratio, color="SNM"), alpha=0.5, data = test.df %>% filter(SNM == 1)) +
+ geom_density(aes(x=rep.ratio, color="NonSNM"), alpha=0.5, data = test.df %>% filter(SNM == 0)) +
+  xlim(c(1,2)) +
+  xlab("Replication Ratio") +
+  ylab("Density") +
+  scale_color_manual("", 
+                      values = c("SNM"="red", 
+                                 "NonSNM"="blue"))
+```
+
+```{r}
+ggplot() +
+  geom_histogram(aes(x=rep.ratio), fill='red', alpha=0.5, data = test.df %>% filter(SNM == 1))
+```
 
 
 
