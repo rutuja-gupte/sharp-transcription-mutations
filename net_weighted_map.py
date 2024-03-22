@@ -8,7 +8,7 @@ feat = pd.read_csv(os.path.join("clean_data", "features.csv"))
 net = pd.read_csv(os.path.join("clean_data", "net.csv"))
 feat["reads"] = 0
 
-print("Files read. Time for computation!")
+print("Files read. Time for computation!", flush=True)
 
 pd.options.mode.chained_assignment = None
 t0 = time.time()
@@ -17,9 +17,9 @@ i = 0
 for d in net.itertuples():
     if i != d.chr_num:
         i = d.chr_num
-        print(f"Now on chromosome: {i}")
+        print(f"Now on chromosome: {i}", flush=True)
         t = time.time() - t0
-        print(f"Time is {t//3600} hours {(t%3600) // 60} minutes {(t%3600) % 60} seconds")
+        print(f"Time is {t//3600} hours {(t%3600) // 60} minutes {(t%3600) % 60} seconds", flush=True)
 
     condition1 = (feat["strand"] == d.strand)
     condition2 = (feat["chr_num"] == d.chr_num) 
@@ -31,5 +31,5 @@ for d in net.itertuples():
     for j in range(len(df)):
         feat.at[(df.iat[j,0]-1), "reads"] += d.reads * dists[j] / total
 
-print("Job done. Now making the file")
+print("Job done. Now making the file", flush=True)
 feat.to_csv("weighted_feat.csv")

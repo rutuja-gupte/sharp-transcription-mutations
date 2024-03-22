@@ -4,11 +4,10 @@ import warnings
 import time
 import os
 
-feat = pd.read_csv(os.path.join("clean_data", "features.csv"))
+feat = pd.read_csv("closest_feat2.csv")
 net = pd.read_csv(os.path.join("clean_data", "net.csv"))
-feat["reads"] = 0.0
 
-print("Files read. Time for computation!", flush = True)
+print("Files read. Time for computation!", flush=True)
 
 pd.options.mode.chained_assignment = None
 t0 = time.time()
@@ -29,7 +28,9 @@ for d in net.itertuples():
     if len(df) != 0:
         dists = (d.pos - df["left"])
         location = dists.argmin()
-        feat.at[dists.index[location], "reads"] += d.reads
-
-print("Job done. Now making the file", flush = True)
-feat.to_csv("closest_feat2.csv")
+        net.at[d.Index, "total"] = df["reads"].iloc[location]
+        net.at[d.Index, "feature"] = df["class"].iloc[location]
+        
+        
+print("Job done. Now making the file", flush=True)
+net.to_csv("closest_net.csv")
