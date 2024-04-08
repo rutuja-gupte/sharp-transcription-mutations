@@ -1,0 +1,343 @@
+---
+title: "Analysis Double"
+author: "Rutuja"
+date: "2024-04-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import statements
+
+```{r}
+library(tidyverse)
+```
+
+Required keys
+
+```{r}
+chr_names<-c("chrI","chrII","chrIII","chrIV","chrV","chrVI","chrVII","chrVIII", "chrIX","chrX","chrXI","chrXII","chrXIII","chrXIV","chrXV","chrXVI")
+
+chr_names2<-c("chr01","chr02","chr03","chr04","chr05","chr06","chr07","chr08","chr09","chr10","chr11","chr12","chr13","chr14","chr15","chr16")
+```
+
+# Reading in files
+
+```{r}
+# power to detect mutations
+power<-read.delim("power_by_site_with_bases.txt",h=F)
+names(power)<-c("chr","pos","hap.wt","hap.del","dip.wt","dip.del","ref")
+power$chr_num<-sapply(power$chr,function(i){which(chr_names2==i)})
+d <- power %>% select(chr_num, pos, ref, hap.wt, hap.del, dip.wt, dip.del)
+d$pwr.tot<-rowSums(d[,c(4:7)])
+```
+
+```{r}
+net <- read.csv("net_mapped/double_net.csv")
+```
+
+```{r}
+df.plus <- net[net$strand == "+",]
+df.minus <- net[net$strand == "-",]
+
+d <- d %>% left_join(df.minus[,c("pos", "chr_num", "total", "feature")], by=c('pos', 'chr_num'), suffix = c("", ".minus"))
+d <- d %>% rename("net_tot.minus" = "total",
+                            "class.minus" = "feature")
+d <- d %>% left_join(df.plus[,c("pos", "chr_num", "total", "feature")], by=c('pos', 'chr_num'), suffix = c("", ".plus"))
+d <- d %>% rename("net_tot.plus" = "total",
+                            "class.plus" = "feature")
+
+d$pos500 <- ((d$pos-1) %/% 1000) * 1000 + 501
+```
+
+
+Starting with the replication dynamics data first
+
+```{r}
+rep.dynamics <- read.csv("replication_data/clean_rep.csv")
+```
+
+```{r}
+d <- d %>% left_join(rep.dynamics[,c("pos","chr_num", "ratio", "rep.slope", "rep.sign")], by=c("chr_num", "pos500"="pos"))
+```
+
+# Now combining mutation data
+
+Reading in the mutation data
+
+```{r}
+mut <- load("mutation_data/Sharp_etal_variants")
+```
+
+Filter to keep specific columns
+
+```{r}
+test.rv <- rv %>% select(CHROM, POS, REF, ALT, TYPE, RDH, MAT, ploidy, allele.freq, chr_copy_num, aneu11, indel.type, genic, mut.type, NCALLED)
+
+test.rv$chr_num <- sapply(test.rv$CHROM,function(i){which(chr_names2==i)})
+test.rv <- test.rv %>% rename("pos" = "POS")
+```
+
+Final join
+
+```{r}
+d <- d %>% left_join(test.rv, by = c("chr_num", "pos"))
+```
+
+# Generating more useful calculated columns
+
+```{r}
+d$net_tot.minus <- d$net_tot.minus %>% replace_na(0)
+d$net_tot.plus <- d$net_tot.plus %>% replace_na(0)
+d$net_tot <- d$net_tot.minus + d$net_tot.plus
+d <- d %>% mutate(tr.or.not = case_when(
+  !is.na(class.minus) | !is.na(class.plus) ~ TRUE,
+  TRUE ~ FALSE
+))
+
+d <- d %>% mutate(class = case_when(
+  !is.na(class.minus) & is.na(class.plus) ~ class.minus,
+  is.na(class.minus) & !is.na(class.plus) ~ class.plus,
+  !is.na(class.minus) & !is.na(class.plus) ~ "both",
+  TRUE ~ "none"
+))
+
+d <- d %>% mutate(transcribed = ifelse(d$net_tot > 0, TRUE, FALSE))
+
+df <- d
+rm(d)
+
+df <- df %>% select(-CHROM)
+df$net_tot.minus <- replace_na(df$net_tot.minus, 0)
+df$net_tot.plus <- replace_na(df$net_tot.plus, 0)
+df$class.minus <- replace_na(df$class.minus, "none")
+df$class.plus <- replace_na(df$class.plus, "none")
+df$net_tot.minus <- replace_na(df$net_tot.minus, 0)
+df$net_tot.plus <- replace_na(df$net_tot.plus, 0)
+df$allele.freq <- replace_na(df$allele.freq, 0)
+df$genic <- replace_na(df$genic, FALSE)
+df$NCALLED <- replace_na(df$NCALLED, 0)
+df <- df %>% mutate(mutated = ifelse(df$NCALLED > 0, 1, 0))
+df$rep.strand <- df$rep.sign
+
+ready.cols <- sapply(df, function(x)all(!is.na(x)))
+ready.cols[ready.cols]
+```
+
+Adding some collision info here
+
+```{r}
+collisions <- df %>% select(chr_num, pos, rep.strand, net_tot.minus, net_tot.plus, mutated)
+```
+
+So for the transcription direction, I am using the direction of whatever is greater between net_tot.plus and net_tot.minus. Finding all the collisions spots.
+
+```{r}
+collisions <- collisions %>% mutate(tr.strand = case_when(
+  net_tot.minus > net_tot.plus ~ -1,
+  net_tot.plus > net_tot.minus ~ 1,
+  TRUE ~ 0
+))
+
+collisions <- collisions %>% mutate(collision = case_when(
+  rep.strand * tr.strand == 1 ~ 1,
+  TRUE ~ 0
+))
+
+collisions <- collisions %>% mutate(net_tot = net_tot.minus + net_tot.minus)
+
+collisions$class <- df$class
+collisions <- collisions %>% mutate(ORF = ifelse(class == "ORF" | class == "ORFs", 1, 0))
+collisions <- collisions %>% mutate(CDS = ifelse(class == "CDS", 1, 0))
+
+collisions$ORF.scaled = scale(collisions$ORF)
+collisions$CDS.scaled = scale(collisions$CDS)
+
+collisions$type <- df$TYPE
+
+collisions <- collisions %>% mutate(SNM = ifelse(type == "SNP", 1, 0))
+collisions$SNM <- replace_na(collisions$SNM,0)
+collisions <- collisions %>% mutate(INDEL = ifelse(type == "INDEL", 1, 0))
+collisions$INDEL <- replace_na(collisions$INDEL, 0)
+
+collisions$ref <- df$ref
+collisions$rep.ratio <- df$ratio
+
+collisions$rep.ratio <- replace_na(collisions$rep.ratio, 1)
+collisions$rep.ratio.scaled <- scale(collisions$rep.ratio)
+collisions <- collisions %>% mutate(ref.type = case_when(
+  ref == "A" | ref == "T" ~ "A/T",
+  ref == "G" | ref == "C" ~ "G/C",
+  TRUE ~ NA
+))
+```
+
+Trying to make a large model and working my way backwards. Making another testing dataframe
+
+```{r}
+test.df <- collisions[,c("chr_num", "pos", "rep.strand", "mutated", "collision", "net_tot", "rep.ratio", "CDS", "SNM", "INDEL", "ref.type")]
+test.df$pwr.tot <- df$pwr.tot
+test.df$rep.slope <- df$rep.slope
+```
+
+Making a scaled dataset
+
+```{r}
+df.scaled <- test.df[, c("chr_num", "pos", "mutated", "SNM", "INDEL", "ref.type", "CDS", "rep.strand")]
+# df.scaled$rep.strand <- scale(test.df$rep.strand)
+df.scaled$collision <- scale(test.df$collision)
+df.scaled$net_tot <- scale(test.df$net_tot)
+df.scaled$rep.ratio <- scale(test.df$rep.ratio)
+df.scaled$rep.slope <- scale(test.df$rep.slope)
+df.scaled$pwr.tot <- scale(test.df$pwr.tot)
+# df.scaled$CDS <- scale(test.df$CDS)
+```
+
+Model making (yay!)
+
+```{r}
+mod <- glm(SNM ~ ref.type + collision * net_tot * CDS + rep.ratio + rep.strand, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ ref.type + collision * net_tot * CDS + rep.ratio + 
+    rep.strand, family = "binomial", data = df.scaled)
+
+Coefficients:
+                        Estimate Std. Error z value Pr(>|z|)    
+(Intercept)             -9.87692    6.71969  -1.470  0.14160    
+ref.typeG/C              1.01517    0.04801  21.145  < 2e-16 ***
+collision               -1.41944   14.84967  -0.096  0.92385    
+net_tot                 -3.14988   32.85371  -0.096  0.92362    
+CDS                     -9.33235   97.29496  -0.096  0.92359    
+rep.ratio               -0.07449    0.02509  -2.969  0.00299 ** 
+rep.strand               0.06867    0.02495   2.753  0.00591 ** 
+collision:net_tot       -6.92877   72.60359  -0.095  0.92397    
+collision:CDS          -20.51412  215.01271  -0.095  0.92399    
+net_tot:CDS            -45.42740  475.69894  -0.095  0.92392    
+collision:net_tot:CDS -100.47185 1051.24998  -0.096  0.92386    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 36219  on 11364703  degrees of freedom
+Residual deviance: 35718  on 11364693  degrees of freedom
+  (706622 observations deleted due to missingness)
+AIC: 35740
+
+Number of Fisher Scoring iterations: 25
+
+```{r}
+mod <- glm(SNM ~ ref.type + collision + net_tot * CDS + rep.ratio + rep.strand, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ ref.type + collision + net_tot * CDS + rep.ratio + 
+    rep.strand, family = "binomial", data = df.scaled)
+
+Coefficients:
+              Estimate Std. Error  z value Pr(>|z|)    
+(Intercept) -9.2308006  0.0381851 -241.739  < 2e-16 ***
+ref.typeG/C  1.0150544  0.0480090   21.143  < 2e-16 ***
+collision    0.0021228  0.0228557    0.093  0.92600    
+net_tot     -0.0060020  0.0256829   -0.234  0.81522    
+CDS          0.0003565  0.0224728    0.016  0.98734    
+rep.ratio   -0.0741196  0.0250862   -2.955  0.00313 ** 
+rep.strand   0.0688170  0.0241633    2.848  0.00440 ** 
+net_tot:CDS  0.0232700  0.0151645    1.535  0.12491    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 36219  on 11364703  degrees of freedom
+Residual deviance: 35725  on 11364696  degrees of freedom
+  (706622 observations deleted due to missingness)
+AIC: 35741
+
+Number of Fisher Scoring iterations: 12
+
+
+```{r}
+df.CDS <- df.scaled %>% filter(CDS == 1)
+df.noCDS <- df.scaled %>% filter(CDS == 0)
+```
+
+
+```{r}
+mod <- glm(SNM ~ ref.type + collision + net_tot + rep.ratio + rep.strand, family = "binomial", df.CDS)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ ref.type + collision + net_tot + rep.ratio + 
+    rep.strand, family = "binomial", data = df.CDS)
+
+Coefficients:
+            Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  -9.9260     0.7571 -13.111   <2e-16 ***
+ref.typeG/C   1.1879     0.6903   1.721   0.0853 .  
+collision     0.2460     0.3094   0.795   0.4266    
+net_tot       0.4526     0.2537   1.784   0.0744 .  
+rep.ratio     0.3618     0.3590   1.008   0.3135    
+rep.strand    0.5368     0.4293   1.250   0.2112    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 192.83  on 56626  degrees of freedom
+Residual deviance: 183.33  on 56621  degrees of freedom
+  (678 observations deleted due to missingness)
+AIC: 195.33
+
+Number of Fisher Scoring iterations: 12
+
+
+```{r}
+mod <- glm(SNM ~ ref.type + collision + net_tot + rep.ratio + rep.strand, family = "binomial", df.noCDS)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ ref.type + collision + net_tot + rep.ratio + 
+    rep.strand, family = "binomial", data = df.noCDS)
+
+Coefficients:
+             Estimate Std. Error  z value Pr(>|z|)    
+(Intercept) -9.230009   0.038263 -241.228  < 2e-16 ***
+ref.typeG/C  1.014214   0.048128   21.073  < 2e-16 ***
+collision   -0.000623   0.023003   -0.027  0.97839    
+net_tot     -0.007069   0.025578   -0.276  0.78227    
+rep.ratio   -0.076430   0.025157   -3.038  0.00238 ** 
+rep.strand   0.066006   0.024221    2.725  0.00643 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 36026  on 11308076  degrees of freedom
+Residual deviance: 35537  on 11308071  degrees of freedom
+  (705944 observations deleted due to missingness)
+AIC: 35549
+
+Number of Fisher Scoring iterations: 12
+
+```{r}
+ggplot() +
+  geom_line(aes(x=rep.dynamics$pos[rep.dynamics$chr_num==1], y=rep.dynamics$ratio[rep.dynamics$chr_num==4]), color='red')
+# 
+# ggplot() +
+#   geom_line(aes(x=rep.dynamics.dip$pos[rep.dynamics.dip$chr_num==1], y=rep.dynamics.dip$ratio[rep.dynamics.dip$chr_num==1]), color='blue') +
+#  
+#   geom_line(aes(x=rep.dynamics.dip$pos[rep.dynamics.dip$chr_num==1], y=predict(loess.models.dip[[1]])), color='black')
+
+
+# df %>% filter(chr_num == 1) %>% ggplot() +
+#   geom_line(aes(x=pos, y=rep.slope.hap), color='red') +
+#   geom_

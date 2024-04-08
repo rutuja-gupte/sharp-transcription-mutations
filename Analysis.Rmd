@@ -1208,3 +1208,126 @@ Residual deviance: 2501.3  on 11364696  degrees of freedom
 AIC: 2517.3
 
 Number of Fisher Scoring iterations: 22
+
+
+
+
+Processing the replication data as required and storing the processed final data to avoid repetitive computations
+
+Redoing those replication calculations
+
+```{r}
+# replication dynamics
+rep.dynamics.hap<-read.delim("replication_data/Muller_rep_times_hap.txt")
+rep.dynamics.hap$chr<-sapply(rep.dynamics.hap$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
+rep.dynamics.hap$start<-rep.dynamics.hap$pos-500; rep.dynamics.hap$end<-rep.dynamics.hap$pos+499
+
+rep.dynamics.dip<-read.delim("replication_data/Muller_rep_times_dip.txt")
+rep.dynamics.dip$chr<-sapply(rep.dynamics.dip$chr_num,function(x){if(x<10){paste("chr0",x,sep="")}else{paste("chr",x,sep="")}})
+rep.dynamics.dip$start<-rep.dynamics.dip$pos-500; rep.dynamics.dip$end<-rep.dynamics.dip$pos+499
+
+
+rep.dynamics <- full_join(rep.dynamics.dip[,c("chr_num", "pos", "chr", "ratio")], rep.dynamics.hap[,c("chr_num", "pos", "chr", "ratio")], by=c("chr_num", "pos", "chr"), suffix = c(".dip", ".hap"))
+rep.dynamics$ratio <- rowMeans(cbind(rep.dynamics$ratio.dip, rep.dynamics$ratio.hap), na.rm=TRUE)
+
+loess.span<-100000
+# loess.span <- 0.12
+
+loess.models <- list()
+for(chr_num in c(1:16)){
+	chr.data<-rep.dynamics[rep.dynamics$chr_num==chr_num,]
+	mod<-loess(ratio~pos, chr.data,span=loess.span/max(chr.data$pos))
+	# mod<-loess(ratio~pos, chr.data,span=loess.span)
+	loess.models<-c(loess.models, list(mod))
+}
+
+chr_names2<-c("chr01","chr02","chr03","chr04","chr05","chr06","chr07","chr08","chr09","chr10","chr11","chr12","chr13","chr14","chr15","chr16")
+
+nderiv<-function(fit, x, eps=1e-5){(predict(fit, x + eps) - predict(fit, x - eps))/(2 * eps)}
+
+# nderiv will return NA at the boundary, so add or subtract 1 to get the slope
+find.rep.slope<-function(chr, pos, model.list){
+	mod<-model.list[[which(chr_names2==chr)]]
+	sl<-nderiv(mod, pos)
+	if(is.na(sl)){sl<-nderiv(mod, pos+1);if(is.na(sl)){sl<-nderiv(mod, pos-1)}}
+	return(sl)
+}
+
+
+rep.dynamics$rep.slope<-sapply(1:nrow(rep.dynamics),function(r){
+	find.rep.slope(rep.dynamics$chr[r],rep.dynamics$pos[r],loess.models)
+})
+
+rep.dynamics$rep.sign <- sign(rep.dynamics$rep.slope)
+
+
+# extract the fitted values from the model
+find.rep.smooth<-function(chr, pos, model.list){
+	mod<-model.list[[which(chr_names2==chr)]]
+	return(predict(mod, pos))
+}
+
+rep.dynamics$rep.fitted<-sapply(1:nrow(rep.dynamics),function(r){
+	find.rep.smooth(rep.dynamics$chr[r],rep.dynamics$pos[r],loess.models)
+})
+
+rep.dynamics %>% 
+  # filter(chr_num == 5) %>% 
+  ggplot() + 
+  geom_line(aes(x=pos, y=ratio), color='red') +
+  geom_line(aes(x=pos, y=rep.fitted), color='blue') +
+  facet_wrap(vars(chr_num))
+```
+
+Testing this cuz this is being funny
+
+Reading in the features to check with all the ARS
+
+```{r}
+feat<-read.csv("transcription_data/features.csv",h=T)
+feat<-feat[,c(2:5,10:13)]
+names(feat)<-c("SGDID","feat_type","feat_qual","name", "chr_num", "start", "stop", "strand_name")
+# feat<-feat[feat$feat_qual != "Dubious",]
+
+feat$chr_num<-as.numeric(as.character(feat$chr_num))
+feat<-feat[feat$chr_num %in% c(1:16),]
+feat$strand<-sapply(feat$strand_name,function(i){if(i=="W"){"+"}
+  else{
+    if(i=="C"){"-"}
+    else{NA}}})
+feat <- feat %>% filter(!is.na(strand))
+feat$left<-sapply(1:nrow(feat),function(r){if(feat$strand[r]=="+"){feat$start[r]}else{feat$stop[r]}})
+feat$right<-sapply(1:nrow(feat),function(r){if(feat$strand[r]=="+"){feat$stop[r]}else{feat$start[r]}})
+
+```
+
+Plotting time
+
+```{r}
+# ggplot() +
+#   geom_line(data=rep.dynamics[rep.dynamics$chr_num==1,], 
+#             mapping = aes(x=pos, y=ratio))
+
+rep.dynamics %>% 
+  filter(chr_num == 10) %>% 
+  ggplot() + 
+  geom_line(aes(x=pos, y=ratio), color='red') +
+  geom_line(aes(x=pos, y=rep.fitted), color='blue') +
+  geom_vline(xintercept = 
+               feat[(feat$feat_type == "ARS_consensus_sequence") &
+                    (feat$chr_num == 10),]$left, color='black')
+```
+
+
+```{r}
+table(rep.dynamics$rep.sign)
+```
+
+
+Write to a file for easy access
+
+```{r}
+write.csv(rep.dynamics, "replication_data/clean_rep.csv")
+```
+
+

@@ -469,7 +469,7 @@ Since we only have discrete values using loess so that we can get the derivative
 
 ```{r}
 # for each chromosome fit a loess model to the data, with span = 50kb
-loess.span<-20000
+loess.span<-50000
 loess.models.hap<-list()
 for(chr_num in c(1:16)){
 	chr.data<-rep.dynamics.hap[rep.dynamics.hap$chr_num==chr_num,]
