@@ -207,61 +207,59 @@ glm(formula = SNM ~ ref.type + collision * net_tot * CDS + rep.ratio +
     rep.strand, family = "binomial", data = df.scaled)
 
 Coefficients:
-                        Estimate Std. Error z value Pr(>|z|)    
-(Intercept)             -9.87692    6.71969  -1.470  0.14160    
-ref.typeG/C              1.01517    0.04801  21.145  < 2e-16 ***
-collision               -1.41944   14.84967  -0.096  0.92385    
-net_tot                 -3.14988   32.85371  -0.096  0.92362    
-CDS                     -9.33235   97.29496  -0.096  0.92359    
-rep.ratio               -0.07449    0.02509  -2.969  0.00299 ** 
-rep.strand               0.06867    0.02495   2.753  0.00591 ** 
-collision:net_tot       -6.92877   72.60359  -0.095  0.92397    
-collision:CDS          -20.51412  215.01271  -0.095  0.92399    
-net_tot:CDS            -45.42740  475.69894  -0.095  0.92392    
-collision:net_tot:CDS -100.47185 1051.24998  -0.096  0.92386    
+                        Estimate Std. Error  z value Pr(>|z|)    
+(Intercept)           -9.228e+00  3.822e-02 -241.416  < 2e-16 ***
+ref.typeG/C            1.021e+00  4.782e-02   21.353  < 2e-16 ***
+collision             -1.577e-03  2.342e-02   -0.067    0.946    
+net_tot               -2.572e-03  1.899e-02   -0.135    0.892    
+CDS                   -1.300e+02  1.122e+03   -0.116    0.908    
+rep.ratio             -9.556e-02  2.407e-02   -3.970 7.17e-05 ***
+rep.strand             1.281e-02  2.383e-02    0.538    0.591    
+collision:net_tot     -2.145e-02  2.176e-02   -0.986    0.324    
+collision:CDS         -2.897e+02  2.513e+03   -0.115    0.908    
+net_tot:CDS           -6.330e+02  5.487e+03   -0.115    0.908    
+collision:net_tot:CDS -1.419e+03  1.229e+04   -0.115    0.908    
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 (Dispersion parameter for binomial family taken to be 1)
 
-    Null deviance: 36219  on 11364703  degrees of freedom
-Residual deviance: 35718  on 11364693  degrees of freedom
-  (706622 observations deleted due to missingness)
-AIC: 35740
+    Null deviance: 36561  on 11449703  degrees of freedom
+Residual deviance: 36055  on 11449693  degrees of freedom
+  (621622 observations deleted due to missingness)
+AIC: 36077
 
 Number of Fisher Scoring iterations: 25
 
 ```{r}
-mod <- glm(SNM ~ ref.type + collision + net_tot * CDS + rep.ratio + rep.strand, family = "binomial", df.scaled)
+mod <- glm(SNM ~ ref.type + collision * net_tot + rep.ratio + rep.strand, family = "binomial", df.scaled)
 summary(mod)
 ```
 
 Call:
-glm(formula = SNM ~ ref.type + collision + net_tot * CDS + rep.ratio + 
+glm(formula = SNM ~ ref.type + collision * net_tot + rep.ratio + 
     rep.strand, family = "binomial", data = df.scaled)
 
 Coefficients:
-              Estimate Std. Error  z value Pr(>|z|)    
-(Intercept) -9.2308006  0.0381851 -241.739  < 2e-16 ***
-ref.typeG/C  1.0150544  0.0480090   21.143  < 2e-16 ***
-collision    0.0021228  0.0228557    0.093  0.92600    
-net_tot     -0.0060020  0.0256829   -0.234  0.81522    
-CDS          0.0003565  0.0224728    0.016  0.98734    
-rep.ratio   -0.0741196  0.0250862   -2.955  0.00313 ** 
-rep.strand   0.0688170  0.0241633    2.848  0.00440 ** 
-net_tot:CDS  0.0232700  0.0151645    1.535  0.12491    
+                   Estimate Std. Error  z value Pr(>|z|)    
+(Intercept)       -9.227313   0.038187 -241.634  < 2e-16 ***
+ref.typeG/C        1.021077   0.047816   21.354  < 2e-16 ***
+collision          0.001813   0.023161    0.078    0.938    
+net_tot           -0.001905   0.018004   -0.106    0.916    
+rep.ratio         -0.095667   0.024061   -3.976 7.01e-05 ***
+rep.strand         0.015695   0.023792    0.660    0.509    
+collision:net_tot -0.023427   0.021798   -1.075    0.283    
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 (Dispersion parameter for binomial family taken to be 1)
 
-    Null deviance: 36219  on 11364703  degrees of freedom
-Residual deviance: 35725  on 11364696  degrees of freedom
-  (706622 observations deleted due to missingness)
-AIC: 35741
+    Null deviance: 36561  on 11449703  degrees of freedom
+Residual deviance: 36063  on 11449697  degrees of freedom
+  (621622 observations deleted due to missingness)
+AIC: 36077
 
 Number of Fisher Scoring iterations: 12
-
 
 ```{r}
 df.CDS <- df.scaled %>% filter(CDS == 1)
@@ -280,24 +278,23 @@ glm(formula = SNM ~ ref.type + collision + net_tot + rep.ratio +
 
 Coefficients:
             Estimate Std. Error z value Pr(>|z|)    
-(Intercept)  -9.9260     0.7571 -13.111   <2e-16 ***
-ref.typeG/C   1.1879     0.6903   1.721   0.0853 .  
-collision     0.2460     0.3094   0.795   0.4266    
-net_tot       0.4526     0.2537   1.784   0.0744 .  
-rep.ratio     0.3618     0.3590   1.008   0.3135    
-rep.strand    0.5368     0.4293   1.250   0.2112    
+(Intercept) -9.56269    0.69392 -13.781   <2e-16 ***
+ref.typeG/C  0.90807    0.62696   1.448    0.148    
+collision    0.21649    0.29465   0.735    0.463    
+net_tot      0.39005    0.24775   1.574    0.115    
+rep.ratio    0.07033    0.33012   0.213    0.831    
+rep.strand   0.46543    0.41094   1.133    0.257    
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 (Dispersion parameter for binomial family taken to be 1)
 
-    Null deviance: 192.83  on 56626  degrees of freedom
-Residual deviance: 183.33  on 56621  degrees of freedom
-  (678 observations deleted due to missingness)
-AIC: 195.33
+    Null deviance: 210.19  on 57067  degrees of freedom
+Residual deviance: 203.16  on 57062  degrees of freedom
+  (237 observations deleted due to missingness)
+AIC: 215.16
 
 Number of Fisher Scoring iterations: 12
-
 
 ```{r}
 mod <- glm(SNM ~ ref.type + collision + net_tot + rep.ratio + rep.strand, family = "binomial", df.noCDS)
@@ -310,21 +307,21 @@ glm(formula = SNM ~ ref.type + collision + net_tot + rep.ratio +
 
 Coefficients:
              Estimate Std. Error  z value Pr(>|z|)    
-(Intercept) -9.230009   0.038263 -241.228  < 2e-16 ***
-ref.typeG/C  1.014214   0.048128   21.073  < 2e-16 ***
-collision   -0.000623   0.023003   -0.027  0.97839    
-net_tot     -0.007069   0.025578   -0.276  0.78227    
-rep.ratio   -0.076430   0.025157   -3.038  0.00238 ** 
-rep.strand   0.066006   0.024221    2.725  0.00643 ** 
+(Intercept) -9.231738   0.038177 -241.815  < 2e-16 ***
+ref.typeG/C  1.021789   0.047956   21.307  < 2e-16 ***
+collision   -0.006304   0.023043   -0.274    0.784    
+net_tot     -0.005991   0.025238   -0.237    0.812    
+rep.ratio   -0.096362   0.024136   -3.993 6.54e-05 ***
+rep.strand   0.019169   0.023201    0.826    0.409    
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 (Dispersion parameter for binomial family taken to be 1)
 
-    Null deviance: 36026  on 11308076  degrees of freedom
-Residual deviance: 35537  on 11308071  degrees of freedom
-  (705944 observations deleted due to missingness)
-AIC: 35549
+    Null deviance: 36350  on 11392635  degrees of freedom
+Residual deviance: 35856  on 11392630  degrees of freedom
+  (621385 observations deleted due to missingness)
+AIC: 35868
 
 Number of Fisher Scoring iterations: 12
 
@@ -333,11 +330,12 @@ ggplot() +
   geom_line(aes(x=rep.dynamics$pos[rep.dynamics$chr_num==1], y=rep.dynamics$ratio[rep.dynamics$chr_num==4]), color='red')
 # 
 # ggplot() +
-#   geom_line(aes(x=rep.dynamics.dip$pos[rep.dynamics.dip$chr_num==1], y=rep.dynamics.dip$ratio[rep.dynamics.dip$chr_num==1]), color='blue') +
-#  
-#   geom_line(aes(x=rep.dynamics.dip$pos[rep.dynamics.dip$chr_num==1], y=predict(loess.models.dip[[1]])), color='black')
+# #   geom_line(aes(x=rep.dynamics.dip$pos[rep.dynamics.dip$chr_num==1], y=rep.dynamics.dip$ratio[rep.dynamics.dip$chr_num==1]), color='blue') +
+# #  
+  # geom_line(aes(x=rep.dynamics.dip$pos[rep.dynamics.dip$chr_num==1], y=predict(loess.models.dip[[1]])), color='black')
 
 
 # df %>% filter(chr_num == 1) %>% ggplot() +
 #   geom_line(aes(x=pos, y=rep.slope.hap), color='red') +
 #   geom_
+```

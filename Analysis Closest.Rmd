@@ -198,7 +198,41 @@ df.scaled$CDS <- scale(test.df$CDS)
 Model making (yay!)
 
 ```{r}
-mod <- glm(SNM ~ ref.type + collision + net_tot * CDS + rep.ratio + rep.strand, family = "binomial", df.scaled)
+mod <- glm(SNM ~ ref.type + collision * net_tot * CDS + rep.ratio + rep.strand, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ ref.type + collision * net_tot * CDS + rep.ratio + 
+    rep.strand, family = "binomial", data = df.scaled)
+
+Coefficients:
+                       Estimate Std. Error z value Pr(>|z|)    
+(Intercept)            -9.77006    4.68677  -2.085   0.0371 *  
+ref.typeG/C             1.02124    0.04782  21.357  < 2e-16 ***
+collision              -1.20490   10.49653  -0.115   0.9086    
+net_tot                -2.65565   22.97436  -0.116   0.9080    
+CDS                    -7.84918   67.85905  -0.116   0.9079    
+rep.ratio              -0.09556    0.02407  -3.971 7.17e-05 ***
+rep.strand              0.01274    0.02393   0.533   0.5943    
+collision:net_tot      -5.95183   51.45508  -0.116   0.9079    
+collision:CDS         -17.48049  151.98219  -0.115   0.9084    
+net_tot:CDS           -38.30307  332.65272  -0.115   0.9083    
+collision:net_tot:CDS -85.85754  745.03397  -0.115   0.9083    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 36561  on 11449703  degrees of freedom
+Residual deviance: 36055  on 11449693  degrees of freedom
+  (621622 observations deleted due to missingness)
+AIC: 36077
+
+Number of Fisher Scoring iterations: 25
+
+```{r}
+mod <- glm(SNM ~ ref.type + collision * net_tot + CDS + rep.ratio + rep.strand, family = "binomial", df.scaled)
 summary(mod)
 ```
 
@@ -207,24 +241,25 @@ glm(formula = SNM ~ ref.type + collision + net_tot * CDS + rep.ratio +
     rep.strand, family = "binomial", data = df.scaled)
 
 Coefficients:
-              Estimate Std. Error  z value Pr(>|z|)    
-(Intercept) -9.2309806  0.0381872 -241.730  < 2e-16 ***
-ref.typeG/C  1.0154073  0.0480111   21.149  < 2e-16 ***
-collision    0.0024626  0.0229464    0.107  0.91454    
-net_tot     -0.0187806  0.0286766   -0.655  0.51253    
-CDS         -0.0002573  0.0225680   -0.011  0.99090    
-rep.ratio   -0.0740338  0.0250866   -2.951  0.00317 ** 
-rep.strand   0.0688050  0.0241633    2.847  0.00441 ** 
-net_tot:CDS  0.0212674  0.0132070    1.610  0.10733    
+             Estimate Std. Error  z value Pr(>|z|)    
+(Intercept) -9.231252   0.038074 -242.453  < 2e-16 ***
+ref.typeG/C  1.021296   0.047819   21.358  < 2e-16 ***
+collision    0.001137   0.022885    0.050    0.960    
+net_tot     -0.018467   0.028639   -0.645    0.519    
+CDS          0.006564   0.021427    0.306    0.759    
+rep.ratio   -0.095309   0.024068   -3.960 7.49e-05 ***
+rep.strand   0.021875   0.023141    0.945    0.344    
+net_tot:CDS  0.020118   0.013231    1.521    0.128    
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 (Dispersion parameter for binomial family taken to be 1)
 
-    Null deviance: 36219  on 11364703  degrees of freedom
-Residual deviance: 35724  on 11364696  degrees of freedom
-  (706622 observations deleted due to missingness)
-AIC: 35740
+    Null deviance: 36561  on 11449703  degrees of freedom
+Residual deviance: 36062  on 11449696  degrees of freedom
+  (621622 observations deleted due to missingness)
+AIC: 36078
 
 Number of Fisher Scoring iterations: 12
+
 
