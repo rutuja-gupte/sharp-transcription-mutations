@@ -152,8 +152,8 @@ collisions$class <- df$class
 collisions <- collisions %>% mutate(ORF = ifelse(class == "ORF" | class == "ORFs", 1, 0))
 collisions <- collisions %>% mutate(CDS = ifelse(class == "CDS", 1, 0))
 
-collisions$ORF.scaled = scale(collisions$ORF)
-collisions$CDS.scaled = scale(collisions$CDS)
+# collisions$ORF.scaled = scale(collisions$ORF)
+# collisions$CDS.scaled = scale(collisions$CDS)
 
 collisions$type <- df$TYPE
 
@@ -177,7 +177,7 @@ collisions <- collisions %>% mutate(ref.type = case_when(
 Trying to make a large model and working my way backwards. Making another testing dataframe
 
 ```{r}
-test.df <- collisions[,c("chr_num", "pos", "rep.strand", "mutated", "collision", "net_tot", "rep.ratio", "CDS", "SNM", "INDEL", "ref.type")]
+test.df <- collisions[,c("chr_num", "pos", "rep.strand", "mutated", "collision", "net_tot", "rep.ratio", "CDS", "SNM", "INDEL", "ref.type", "tr.strand")]
 test.df$pwr.tot <- df$pwr.tot
 test.df$rep.slope <- df$rep.slope
 ```
@@ -185,9 +185,9 @@ test.df$rep.slope <- df$rep.slope
 Making a scaled dataset
 
 ```{r}
-df.scaled <- test.df[, c("chr_num", "pos", "mutated", "SNM", "INDEL", "ref.type", "CDS", "rep.strand")]
+df.scaled <- test.df[, c("chr_num", "pos", "mutated", "SNM", "INDEL", "ref.type", "CDS", "rep.strand", "collision", "tr.strand")]
 # df.scaled$rep.strand <- scale(test.df$rep.strand)
-df.scaled$collision <- scale(test.df$collision)
+# df.scaled$collision <- scale(test.df$collision)
 df.scaled$net_tot <- scale(test.df$net_tot)
 df.scaled$rep.ratio <- scale(test.df$rep.ratio)
 df.scaled$rep.slope <- scale(test.df$rep.slope)
@@ -195,10 +195,220 @@ df.scaled$pwr.tot <- scale(test.df$pwr.tot)
 # df.scaled$CDS <- scale(test.df$CDS)
 ```
 
+
+For a change: some graphs
+
+```{r}
+bind_rows(df.scaled[(df.scaled$SNM==1),][1:500,], df.scaled[sample(nrow(df.scaled), 500),]) %>%
+  # df.scaled[sample(nrow(df.scaled), 10000),] %>%
+  ggplot() +
+  geom_point(aes(y=rep.ratio, x=net_tot, color=as.character(SNM))) +
+  scale_x_log10() 
+
+bind_rows(df.scaled[(df.scaled$SNM==1),][1:500,], df.scaled[sample(nrow(df.scaled), 500),]) %>%
+  # df.scaled[sample(nrow(df.scaled), 10000),] %>%
+  ggplot() +
+  geom_point(aes(y=rep.ratio, color=ref.type, x=as.character(SNM))) #+
+  scale_x_log10() 
+  
+  
+bind_rows(df.scaled[(df.scaled$SNM==1),][sample(1899, 500),], df.scaled[sample(nrow(df.scaled), 500),]) %>%
+  ggplot() +
+  geom_point(aes(y=rep.ratio, x=net_tot, color=as.character(SNM))) +
+  facet_wrap(vars(collision)) +
+  scale_x_log10()
+
+bind_rows(df.scaled[(df.scaled$SNM==1),][sample(1899, 1000),], df.scaled[sample(nrow(df.scaled), 1000),]) %>%
+  ggplot() +
+  geom_point(aes(y=rep.ratio, x=net_tot, color=as.character(SNM))) +
+  facet_grid(cols =  vars(collision), rows=vars(rep.strand)) +
+  scale_x_log10()
+
+bind_rows(df.scaled[(df.scaled$SNM==1),][sample(1899),], df.scaled[sample(nrow(df.scaled), 1899),]) %>%
+  ggplot() +
+  geom_point(aes(x=rep.ratio, y=net_tot, color=as.character(SNM))) +
+  facet_grid(cols = vars(tr.strand), rows=vars(rep.strand)) +
+  scale_y_log10()
+
+bind_rows(test.df[(test.df$SNM==1),][sample(1899),], test.df[sample(nrow(test.df), 1899),]) %>%
+  ggplot() +
+  geom_point(aes(x=rep.ratio, y=net_tot, color=as.character(SNM))) +
+  facet_grid(cols = vars(tr.strand), rows=vars(rep.strand)) +
+  scale_y_log10()
+```
+
+
 Model making (yay!)
 
 ```{r}
-mod <- glm(SNM ~ ref.type + collision * net_tot * CDS + rep.ratio + rep.strand, family = "binomial", df.scaled)
+mod <- glm(SNM ~ net_tot * rep.ratio + CDS + collision * rep.strand + pwr.tot, family = "binomial", df.scaled)
+summary(mod)
+```
+
+```{r}
+mod <- glm(SNM ~ ref.type + collision * net_tot + CDS * rep.ratio + rep.strand + pwr.tot, family = "binomial", df.scaled)
+summary(mod)
+```
+
+```{r}
+mod <- glm(SNM ~ ref.type + collision * net_tot + CDS * rep.ratio + rep.strand + pwr.tot, family = "binomial", df.scaled)
+summary(mod)
+```
+
+```{r}
+mod <- glm(SNM ~ collision * net_tot + CDS * rep.ratio * rep.strand, family = "binomial", df.scaled)
+summary(mod)
+```
+
+```{r}
+mod <- glm(SNM ~ collision * net_tot * CDS * rep.ratio * rep.strand, family = "binomial", df.scaled)
+summary(mod)
+```
+
+```{r}
+mod <- glm(SNM ~ collision * net_tot * CDS, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ collision * net_tot * CDS, family = "binomial", 
+    data = df.scaled)
+
+Coefficients:
+                        Estimate Std. Error  z value Pr(>|z|)    
+(Intercept)           -8.765e+00  2.540e-02 -345.136   <2e-16 ***
+collision              8.449e-02  6.199e-02    1.363   0.1729    
+net_tot                5.864e-02  4.420e-02    1.327   0.1846    
+CDS                   -3.059e+01  4.056e+03   -0.008   0.9940    
+collision:net_tot     -1.869e-01  1.029e-01   -1.815   0.0695 .  
+collision:CDS         -1.522e+03  2.291e+04   -0.066   0.9470    
+net_tot:CDS            7.110e+00  8.784e+02    0.008   0.9935    
+collision:net_tot:CDS -1.118e+04  1.622e+05   -0.069   0.9451    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 37058  on 12071325  degrees of freedom
+Residual deviance: 37044  on 12071318  degrees of freedom
+AIC: 37060
+
+Number of Fisher Scoring iterations: 25
+
+
+```{r}
+mod <- glm(SNM ~ collision + net_tot * CDS, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ collision + net_tot * CDS, family = "binomial", 
+    data = df.scaled)
+
+Coefficients:
+            Estimate Std. Error  z value Pr(>|z|)    
+(Intercept) -8.76953    0.02540 -345.305   <2e-16 ***
+collision    0.07131    0.06066    1.176    0.240    
+net_tot     -0.01189    0.03081   -0.386    0.700    
+CDS         -0.25462    0.57650   -0.442    0.659    
+net_tot:CDS  0.54385    0.27378    1.986    0.047 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 37058  on 12071325  degrees of freedom
+Residual deviance: 37054  on 12071321  degrees of freedom
+AIC: 37064
+
+Number of Fisher Scoring iterations: 11
+
+```{r}
+mod <- glm(SNM ~ collision * net_tot + CDS, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ collision * net_tot + CDS, family = "binomial", 
+    data = df.scaled)
+
+Coefficients:
+                  Estimate Std. Error  z value Pr(>|z|)    
+(Intercept)       -8.76528    0.02538 -345.347   <2e-16 ***
+collision          0.08754    0.06180    1.417   0.1566    
+net_tot            0.06568    0.04234    1.551   0.1208    
+CDS               -0.04349    0.50134   -0.087   0.9309    
+collision:net_tot -0.19667    0.10246   -1.920   0.0549 .  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 37058  on 12071325  degrees of freedom
+Residual deviance: 37052  on 12071321  degrees of freedom
+AIC: 37062
+
+Number of Fisher Scoring iterations: 12
+
+```{r}
+mod <- glm(SNM ~ collision * CDS + net_tot, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ collision * CDS + net_tot, family = "binomial", 
+    data = df.scaled)
+
+Coefficients:
+               Estimate Std. Error  z value Pr(>|z|)    
+(Intercept)   -8.768421   0.025380 -345.492   <2e-16 ***
+collision      0.065207   0.060753    1.073    0.283    
+CDS           -0.599304   0.999242   -0.600    0.549    
+net_tot       -0.007936   0.028090   -0.283    0.778    
+collision:CDS  0.905033   1.155504    0.783    0.433    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 37058  on 12071325  degrees of freedom
+Residual deviance: 37056  on 12071321  degrees of freedom
+AIC: 37066
+
+Number of Fisher Scoring iterations: 11
+
+```{r}
+mod <- glm(SNM ~ collision * net_tot + rep.ratio + rep.strand, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ collision * net_tot + rep.ratio * rep.strand, 
+    family = "binomial", data = df.scaled)
+
+Coefficients:
+                      Estimate Std. Error  z value Pr(>|z|)    
+(Intercept)          -8.711346   0.025581 -340.537  < 2e-16 ***
+collision             0.035842   0.061922    0.579   0.5627    
+net_tot               0.052537   0.045377    1.158   0.2469    
+rep.ratio            -0.098569   0.024071   -4.095 4.22e-05 ***
+rep.strand            0.002211   0.024061    0.092   0.9268    
+collision:net_tot    -0.178595   0.107472   -1.662   0.0966 .  
+rep.ratio:rep.strand -0.003044   0.024072   -0.126   0.8994    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 36561  on 11449703  degrees of freedom
+Residual deviance: 36540  on 11449697  degrees of freedom
+  (621622 observations deleted due to missingness)
+AIC: 36554
+
+Number of Fisher Scoring iterations: 12
+
+```{r}
+mod <- glm(SNM ~ ref.type + collision * net_tot + CDS + rep.ratio + rep.strand + pwr.tot, family = "binomial", df.scaled)
 summary(mod)
 ```
 
@@ -208,17 +418,17 @@ glm(formula = SNM ~ ref.type + collision * net_tot * CDS + rep.ratio +
 
 Coefficients:
                         Estimate Std. Error  z value Pr(>|z|)    
-(Intercept)           -9.228e+00  3.820e-02 -241.573  < 2e-16 ***
+(Intercept)           -9.230e+00  3.946e-02 -233.928  < 2e-16 ***
 ref.typeG/C            1.021e+00  4.782e-02   21.358  < 2e-16 ***
-collision              4.722e-03  2.317e-02    0.204    0.838    
-net_tot               -2.234e-02  2.862e-02   -0.781    0.435    
-CDS                   -1.388e+02  3.684e+03   -0.038    0.970    
+collision              1.269e-02  6.224e-02    0.204    0.838    
+net_tot               -8.210e-03  2.993e-02   -0.274    0.784    
+CDS                   -2.936e+01  4.237e+03   -0.007    0.994    
 rep.ratio             -9.502e-02  2.407e-02   -3.947  7.9e-05 ***
 rep.strand             1.509e-02  2.383e-02    0.633    0.527    
-collision:net_tot     -3.164e-02  3.465e-02   -0.913    0.361    
-collision:CDS         -2.451e+02  2.818e+03   -0.087    0.931    
-net_tot:CDS           -8.171e+02  7.541e+03   -0.108    0.914    
-collision:net_tot:CDS -1.846e+03  1.681e+04   -0.110    0.913    
+collision:net_tot     -8.501e-02  9.309e-02   -0.913    0.361    
+collision:CDS         -6.584e+02  7.572e+03   -0.087    0.931    
+net_tot:CDS            6.867e+00  9.176e+02    0.007    0.994    
+collision:net_tot:CDS -4.959e+03  4.516e+04   -0.110    0.913    
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
@@ -230,6 +440,38 @@ Residual deviance: 36055  on 11449693  degrees of freedom
 AIC: 36077
 
 Number of Fisher Scoring iterations: 25
+
+
+Call:
+glm(formula = SNM ~ ref.type + collision * net_tot * CDS + rep.ratio + 
+    rep.strand + pwr.tot, family = "binomial", data = df.scaled)
+
+Coefficients:
+                        Estimate Std. Error  z value Pr(>|z|)    
+(Intercept)           -9.315e+00  4.303e-02 -216.488  < 2e-16 ***
+ref.typeG/C            1.013e+00  4.782e-02   21.188  < 2e-16 ***
+collision             -1.156e-03  6.219e-02   -0.019 0.985171    
+net_tot               -1.068e-02  3.219e-02   -0.332 0.740145    
+CDS                   -2.939e+01  4.233e+03   -0.007 0.994462    
+rep.ratio             -9.176e-02  2.416e-02   -3.798 0.000146 ***
+rep.strand             1.922e-02  2.384e-02    0.806 0.420162    
+pwr.tot                4.404e-01  7.197e-02    6.119 9.44e-10 ***
+collision:net_tot     -8.122e-02  9.244e-02   -0.879 0.379632    
+collision:CDS         -6.520e+02  7.577e+03   -0.086 0.931419    
+net_tot:CDS            6.871e+00  9.168e+02    0.007 0.994020    
+collision:net_tot:CDS -4.913e+03  4.522e+04   -0.109 0.913483    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 36561  on 11449703  degrees of freedom
+Residual deviance: 35995  on 11449692  degrees of freedom
+  (621622 observations deleted due to missingness)
+AIC: 36019
+
+Number of Fisher Scoring iterations: 25
+
 
 
 ```{r}
@@ -323,3 +565,9 @@ Residual deviance: 35989  on 11424895  degrees of freedom
 AIC: 36003
 
 Number of Fisher Scoring iterations: 12
+
+```{r}
+mod <- glm(INDEL ~ ref.type + collision * net_tot * CDS + rep.ratio + rep.strand, family = "binomial", df.scaled)
+summary(mod)
+```
+

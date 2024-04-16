@@ -1230,7 +1230,7 @@ rep.dynamics.dip$start<-rep.dynamics.dip$pos-500; rep.dynamics.dip$end<-rep.dyna
 rep.dynamics <- full_join(rep.dynamics.dip[,c("chr_num", "pos", "chr", "ratio")], rep.dynamics.hap[,c("chr_num", "pos", "chr", "ratio")], by=c("chr_num", "pos", "chr"), suffix = c(".dip", ".hap"))
 rep.dynamics$ratio <- rowMeans(cbind(rep.dynamics$ratio.dip, rep.dynamics$ratio.hap), na.rm=TRUE)
 
-loess.span<-100000
+loess.span<-30000
 # loess.span <- 0.12
 
 loess.models <- list()
@@ -1316,6 +1316,62 @@ rep.dynamics %>%
   geom_vline(xintercept = 
                feat[(feat$feat_type == "ARS_consensus_sequence") &
                     (feat$chr_num == 10),]$left, color='black')
+```
+
+```{r}
+muller_ori <- read.csv("muller_rep.csv")
+
+chr_names<-c("chrI","chrII","chrIII","chrIV","chrV","chrVI","chrVII","chrVIII", "chrIX","chrX","chrXI","chrXII","chrXIII","chrXIV","chrXV","chrXVI")
+
+muller_ori$chr_num <- sapply(muller_ori$chr,function(x){
+  which(chr_names==x)
+  })
+
+rep.dynamics %>% 
+  # filter(chr_num == 5) %>% 
+  ggplot() + 
+  geom_line(aes(x=pos, y=ratio), color='red') +
+  geom_line(aes(x=pos, y=rep.fitted), color='blue') +
+  facet_wrap(vars(chr_num)) +
+  geom_vline(data = muller_ori,mapping = aes(xintercept=loc)) +
+  facet_wrap(vars(chr_num))
+```
+
+
+```{r}
+muller_ori <- read.csv("rep.csv")
+
+chr_names<-c("chrI","chrII","chrIII","chrIV","chrV","chrVI","chrVII","chrVIII", "chrIX","chrX","chrXI","chrXII","chrXIII","chrXIV","chrXV","chrXVI")
+
+muller_ori$chr_num <- sapply(muller_ori$chr,function(x){
+  which(chr_names==x)
+  })
+
+rep.dynamics %>% 
+  filter(chr_num %in% c(5,6,7,8)) %>%
+  ggplot() + 
+  geom_line(aes(x=pos, y=ratio), color='red') +
+  geom_line(aes(x=pos, y=rep.fitted), color='blue') +
+  facet_wrap(vars(chr_num)) +
+  geom_vline(data = muller_ori %>% filter(chr_num %in% c(5,6,7,8)),
+             mapping = aes(xintercept=loc), linetype="dashed") +
+  facet_wrap(vars(chr_num))
+```
+
+
+```{r}
+muller_ori <- read.csv("rep2.csv")
+muller_ori$chr_num <- muller_ori$Chromosome
+
+rep.dynamics %>% 
+  filter(chr_num %in% c(5,6,7,8)) %>%
+  ggplot() + 
+  geom_line(aes(x=pos, y=ratio), color='red') +
+  geom_line(aes(x=pos, y=rep.fitted), color='blue') +
+  facet_wrap(vars(chr_num)) +
+  geom_vline(data = muller_ori %>% filter(Chromosome %in% c(5,6,7,8)),
+             mapping = aes(xintercept=Start), linetype="dashed") +
+  facet_wrap(vars(chr_num))
 ```
 
 
