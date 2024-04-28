@@ -188,7 +188,8 @@ Making a scaled dataset
 df.scaled <- test.df[, c("chr_num", "pos", "mutated", "SNM", "INDEL", "ref.type", "CDS", "rep.strand", "collision", "tr.strand")]
 # df.scaled$rep.strand <- scale(test.df$rep.strand)
 # df.scaled$collision <- scale(test.df$collision)
-df.scaled$net_tot <- scale(test.df$net_tot)
+df.scaled$net_tot <- test.df$net_tot
+# df.scaled$net_tot <- scale(test.df$net_tot)
 df.scaled$rep.ratio <- scale(test.df$rep.ratio)
 df.scaled$rep.slope <- scale(test.df$rep.slope)
 df.scaled$pwr.tot <- scale(test.df$pwr.tot)
@@ -209,7 +210,7 @@ bind_rows(df.scaled[(df.scaled$SNM==1),][1:500,], df.scaled[sample(nrow(df.scale
   # df.scaled[sample(nrow(df.scaled), 10000),] %>%
   ggplot() +
   geom_point(aes(y=rep.ratio, color=ref.type, x=as.character(SNM))) #+
-  scale_x_log10() 
+  # scale_x_log10() 
   
   
 bind_rows(df.scaled[(df.scaled$SNM==1),][sample(1899, 500),], df.scaled[sample(nrow(df.scaled), 500),]) %>%
@@ -235,10 +236,89 @@ bind_rows(test.df[(test.df$SNM==1),][sample(1899),], test.df[sample(nrow(test.df
   geom_point(aes(x=rep.ratio, y=net_tot, color=as.character(SNM))) +
   facet_grid(cols = vars(tr.strand), rows=vars(rep.strand)) +
   scale_y_log10()
+
+
+# test.df %>% ggplot() +
+#   geom_point(aes(x=rep.ratio, y=net_tot, color=as.character(SNM))) +
+#   facet_grid(cols = vars(tr.strand), rows=vars(rep.strand))
+
+
+temp <- bind_rows(df.scaled[df.scaled$SNM==1,][sample(1899, 1000, replace = FALSE),],
+          df.scaled[df.scaled$SNM==0,][sample(12069427, 1000, replace = FALSE),])
+temp %>%
+  ggplot() +
+  geom_point(aes(y=rep.ratio, x=net_tot, color=as.character(SNM))) +
+  facet_grid(cols =  vars(collision), rows=vars(rep.strand)) 
+
+table(temp$rep.strand, temp$tr.strand)
+table(temp$rep.strand, temp$collision)
+
+test.df %>% ggplot() +
+  geom_density(aes(x=net_tot)) +
+  facet_grid(rows=vars(rep.strand), cols=vars(tr.strand))
+
+test.df %>% ggplot() +
+  geom_density(aes(x=net_tot)) +
+  facet_grid(rows=vars(rep.strand), cols=vars(tr.strand)) +
+  scale_x_log10()
+
+collisions %>% ggplot() +
+  geom_density(aes(x=net_tot)) +
+  facet_grid(rows=vars(rep.strand), cols=vars(tr.strand))
+
+collisions %>% ggplot() +
+  geom_density(aes(x=net_tot)) +
+  facet_grid(rows=vars(rep.strand), cols=vars(tr.strand)) +
+  scale_x_log10()
+
+df.scaled %>% ggplot() +
+  geom_density(aes(x=net_tot)) +
+  facet_grid(rows=vars(rep.strand), cols=vars(tr.strand))
+
+df.scaled %>% ggplot() +
+  geom_density(aes(x=net_tot)) +
+  facet_grid(rows=vars(rep.strand), cols=vars(tr.strand))
 ```
 
 
 Model making (yay!)
+
+```{r}
+mod <- glm(SNM ~ net_tot * rep.ratio * collision + CDS, family = "binomial", df.scaled)
+summary(mod)
+```
+
+Call:
+glm(formula = SNM ~ net_tot * rep.ratio * collision + CDS, family = "binomial", 
+    data = df.scaled)
+
+Coefficients:
+                              Estimate Std. Error  z value Pr(>|z|)    
+(Intercept)                 -8.775e+00  2.570e-02 -341.386   <2e-16 ***
+net_tot                      6.873e-06  4.625e-06    1.486   0.1373    
+rep.ratio                   -1.943e-02  2.560e-02   -0.759   0.4479    
+collision                    1.180e-01  6.636e-02    1.778   0.0754 .  
+CDS                         -4.817e-02  5.014e-01   -0.096   0.9235    
+net_tot:rep.ratio            6.184e-07  3.932e-06    0.157   0.8750    
+net_tot:collision           -2.054e-05  1.099e-05   -1.870   0.0615 .  
+rep.ratio:collision         -1.072e-01  6.883e-02   -1.558   0.1192    
+net_tot:rep.ratio:collision  8.337e-07  1.027e-05    0.081   0.9353    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 37058  on 12071325  degrees of freedom
+Residual deviance: 37047  on 12071317  degrees of freedom
+AIC: 37065
+
+Number of Fisher Scoring iterations: 13
+
+
+
+
+
+
 
 ```{r}
 mod <- glm(SNM ~ net_tot * rep.ratio + CDS + collision * rep.strand + pwr.tot, family = "binomial", df.scaled)
