@@ -185,14 +185,15 @@ test.df$rep.slope <- df$rep.slope
 Making a scaled dataset
 
 ```{r}
-df.scaled <- test.df[, c("chr_num", "pos", "mutated", "SNM", "INDEL", "ref.type", "CDS", "rep.strand", "collision", "tr.strand")]
+df.scaled <- test.df[, c("chr_num", "pos", "mutated", "SNM", "INDEL", "ref.type", "CDS", "rep.strand", "collision", "tr.strand", "net_tot", "rep.ratio")]
 # df.scaled$rep.strand <- scale(test.df$rep.strand)
 # df.scaled$collision <- scale(test.df$collision)
-df.scaled$net_tot <- test.df$net_tot
+# df.scaled$net_tot <- test.df$net_tot
 # df.scaled$net_tot <- scale(test.df$net_tot)
-df.scaled$rep.ratio <- scale(test.df$rep.ratio)
-df.scaled$rep.slope <- scale(test.df$rep.slope)
-df.scaled$pwr.tot <- scale(test.df$pwr.tot)
+# df.scaled$rep.ratio <- test.df$rep.ratio
+# df.scaled$rep.ratio <- scale(test.df$rep.ratio)
+# df.scaled$rep.slope <- scale(test.df$rep.slope)
+# df.scaled$pwr.tot <- scale(test.df$pwr.tot)
 # df.scaled$CDS <- scale(test.df$CDS)
 ```
 
@@ -281,6 +282,11 @@ df.scaled %>% ggplot() +
 ```
 
 
+```{r}
+write.csv(df.scaled, "processed_data/weighted.csv")
+```
+
+
 Model making (yay!)
 
 ```{r}
@@ -293,16 +299,16 @@ glm(formula = SNM ~ net_tot * rep.ratio * collision + CDS, family = "binomial",
     data = df.scaled)
 
 Coefficients:
-                              Estimate Std. Error  z value Pr(>|z|)    
-(Intercept)                 -8.775e+00  2.570e-02 -341.386   <2e-16 ***
-net_tot                      6.873e-06  4.625e-06    1.486   0.1373    
-rep.ratio                   -1.943e-02  2.560e-02   -0.759   0.4479    
-collision                    1.180e-01  6.636e-02    1.778   0.0754 .  
-CDS                         -4.817e-02  5.014e-01   -0.096   0.9235    
-net_tot:rep.ratio            6.184e-07  3.932e-06    0.157   0.8750    
-net_tot:collision           -2.054e-05  1.099e-05   -1.870   0.0615 .  
-rep.ratio:collision         -1.072e-01  6.883e-02   -1.558   0.1192    
-net_tot:rep.ratio:collision  8.337e-07  1.027e-05    0.081   0.9353    
+                              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)                 -8.682e+00  1.244e-01 -69.799   <2e-16 ***
+net_tot                      3.910e-06  2.046e-05   0.191   0.8484    
+rep.ratio                   -6.815e-02  8.980e-02  -0.759   0.4479    
+collision                    6.319e-01  3.355e-01   1.883   0.0597 .  
+CDS                         -4.817e-02  5.014e-01  -0.096   0.9235    
+net_tot:rep.ratio            2.169e-06  1.379e-05   0.157   0.8750    
+net_tot:collision           -2.453e-05  5.234e-05  -0.469   0.6393    
+rep.ratio:collision         -3.761e-01  2.414e-01  -1.558   0.1192    
+net_tot:rep.ratio:collision  2.924e-06  3.602e-05   0.081   0.9353    
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
@@ -314,7 +320,10 @@ AIC: 37065
 
 Number of Fisher Scoring iterations: 13
 
-
+```{r}
+mod <- glm(SNM ~ net_tot + rep.ratio * collision, family = "binomial", df.scaled)
+summary(mod)
+```
 
 
 
