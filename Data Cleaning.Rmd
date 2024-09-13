@@ -108,43 +108,57 @@ Observation: transcription data from about 20% of the genome
 
 ### Xu dataset
 
-```{r}
+Xu, Zhenyu, Wu Wei, Julien Gagneur, Fabiana Perocchi, Sandra Clauder-Münster, Jurgi Camblong, Elisa Guffanti, Françoise Stutz, Wolfgang Huber, and Lars M. Steinmetz. “Bidirectional Promoters Generate Pervasive Transcription in Yeast.” Nature 457, no. 7232 (February 2009): 1033–37. https://doi.org/10.1038/nature07728.   
 
+Data collected using tiling arrays. Either S288c or YJM789 strains were used for the data. The dataset contained information about locations of annotated transcripts, SUTs and CUTs.  
+
+**SUTs:** Stable Unannotated Transcripts  
+**CUTs:** Cryptic Unstable Transcripts  
+
+
+```{r}
+xu.headers <- c("chr", "source", "type", "start", "end", "score", "strand", "frame", "sourceMeta")
+
+xu.orf <- read.delim("xu_data/Xu_2009_ORF-Ts_V64.txt", header=F)
+names(xu.orf) <- xu.headers
+
+xu.cuts <- read.delim("xu_data/Xu_2009_CUTs_V64.txt", header=F)
+names(xu.cuts) <- xu.headers
+
+xu.suts <- read.delim("xu_data/Xu_2009_SUTs_V64.txt", header=F)
+names(xu.suts) <- xu.headers
+
+xu.others <- read.delim("xu_data/Xu_2009_other_transcripts_V64.txt", header=F)
+names(xu.others) <- xu.headers
+
+xu <- bind_rows(xu.orf, xu.cuts, xu.suts, xu.others)
+rm(xu.orf, xu.cuts, xu.suts, xu.others)
+
+xu$chr <- sapply(xu$chr, function(x) {which(chr_names == x)})
+xu$class <- data.frame(str_split_fixed(xu$source, "_", 3))$X3
+xu <- xu %>% select(chr, start, end, strand, class)
+xu.tr <- xu
+rm(xu)
+```
+
+### van Djik dataset
+
+```{r}
+vand.tr <- read.delim("transcription_data/vanD_annotations.txt",h=F)
+vand.tr <- vand.tr[,c(1,4,5,7)]
+names(vand.tr) <- c("chr_name","left","right","strand")
+vand.tr$chr <- sapply(vand.tr$chr_name, function(i){which(chr_names == i)})
+vand.tr <- vand.tr %>% select(-chr_name)
+vand.tr$class <- "XUTs"
 ```
 
 
 
+
+
 ```{r}
-# xu.headers <- c("chr", "source", "type", "start", "end", "score", "strand", "frame", "sourceMeta")
-# 
-# xu.ofr <- read.delim("xu_data/Xu_2009_ORF-Ts_V64.txt", header=F)
-# names(xu.ofr) <- xu.headers
-# 
-# xu.cuts <- read.delim("xu_data/Xu_2009_CUTs_V64.txt", header=F)
-# names(xu.cuts) <- xu.headers
-# 
-# xu.suts <- read.delim("xu_data/Xu_2009_SUTs_V64.txt", header=F)
-# names(xu.suts) <- xu.headers
-# 
-# xu.others <- read.delim("xu_data/Xu_2009_other_transcripts_V64.txt", header=F)
-# names(xu.others) <- xu.headers
-# 
-# xu <- bind_rows(xu.ofr, xu.cuts, xu.suts, xu.others)
-# rm(xu.ofr, xu.cuts, xu.suts, xu.others)
-# 
-# xu$left<-xu$start
-# xu$right<-xu$end
-# xu$chr_num<-sapply(xu$chr,function(x){which(chr_names==x)})
-# xu$class <- data.frame(str_split_fixed(xu$source, "_", 3))$X3
-# xu <- xu %>% select(chr_num, left, right, strand, class)
-# xu.tr <- xu
-# rm(xu)
-# 
-# vand.tr<-read.delim("transcription_data/vanD_annotations.txt",h=F)
-# vand.tr<-vand.tr[,c(1,4,5,7)]
-# names(vand.tr)<-c("chr_name","left","right","strand")
-# vand.tr$chr_num<-sapply(vand.tr$chr_name,function(i){which(chr_names==i)})
-# vand.tr <- vand.tr %>% select(-chr_name)
+
+
 # 
 # feat<-read.csv("transcription_data/features.csv",h=T)
 # feat<-feat[,c(2:5,10:13)]
